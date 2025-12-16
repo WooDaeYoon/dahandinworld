@@ -17,6 +17,8 @@ export interface ShopItem {
         y: number;
         width: number;
     };
+    isGlobal?: boolean;
+    isHidden?: boolean;
 }
 
 export interface ChatMessage {
