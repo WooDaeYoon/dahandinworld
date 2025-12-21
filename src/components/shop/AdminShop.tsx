@@ -13,6 +13,8 @@ export default function AdminShop() {
         imageUrl: '',
         isDonation: false,
         category: 'accessory',
+        requiredLevel: 0,
+        requiredBadge: '',
         style: { x: 0, y: 0, width: 100 }
     });
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -22,13 +24,25 @@ export default function AdminShop() {
     const [classCode, setClassCode] = useState<string | null>(null);
     const [className, setClassName] = useState<string | null>(null);
 
+    const [selectedCategory, setSelectedCategory] = useState<'all' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others'>('all');
+
+    const categories = [
+        { id: 'all', label: '전체' },
+        { id: 'hair', label: '헤어' },
+        { id: 'face', label: '얼굴' },
+        { id: 'outfit', label: '의상' },
+        { id: 'accessory', label: '액세서리' },
+        { id: 'others', label: '기타' },
+    ];
+
+
     useEffect(() => {
         const storedClassCode = localStorage.getItem('classCode');
         const storedClassName = localStorage.getItem('className');
+        const storedApiKey = localStorage.getItem('apiKey');
 
         setClassCode(storedClassCode);
         setClassName(storedClassName);
-
         if (storedClassCode) {
             fetchItems(storedClassCode);
         } else {
@@ -36,6 +50,8 @@ export default function AdminShop() {
             window.location.href = '/login';
         }
     }, []);
+
+
 
     const fetchItems = async (code: string) => {
         setLoading(true);
@@ -69,6 +85,8 @@ export default function AdminShop() {
                 imageUrl: imageUrl,
                 isDonation: newItem.isDonation || false,
                 category: newItem.category,
+                requiredLevel: newItem.requiredLevel || 0,
+                requiredBadge: newItem.requiredBadge || '',
                 style: newItem.style,
             });
 
@@ -78,6 +96,8 @@ export default function AdminShop() {
                 imageUrl: '',
                 isDonation: false,
                 category: 'accessory',
+                requiredLevel: 0,
+                requiredBadge: '',
                 style: { x: 0, y: 0, width: 100 }
             });
             setImageFile(null);
@@ -133,6 +153,9 @@ export default function AdminShop() {
         }
     };
 
+    const filteredItems = items.filter(item => selectedCategory === 'all' || item.category === selectedCategory);
+
+
     return (
         <div className="min-h-screen bg-gray-50 p-8">
             <div className="max-w-6xl mx-auto">
@@ -185,19 +208,40 @@ export default function AdminShop() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                                        <select
-                                            value={newItem.category || 'accessory'}
-                                            onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">구매 가능 레벨</label>
+                                        <input
+                                            type="number"
+                                            value={newItem.requiredLevel || 0}
+                                            onChange={(e) => setNewItem({ ...newItem, requiredLevel: Number(e.target.value) })}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        >
-                                            <option value="hair">헤어 (Hair)</option>
-                                            <option value="face">얼굴 (Face)</option>
-                                            <option value="outfit">의상 (Outfit)</option>
-                                            <option value="accessory">액세서리 (Accessory)</option>
-                                            <option value="others">기타 (Others)</option>
-                                        </select>
+                                            min="0"
+                                        />
                                     </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">필요 뱃지 (이름)</label>
+                                    <input
+                                        type="text"
+                                        value={newItem.requiredBadge || ''}
+                                        onChange={(e) => setNewItem({ ...newItem, requiredBadge: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        placeholder="예: 독서왕"
+                                    />
+                                </div>
+
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+                                    <select
+                                        value={newItem.category || 'accessory'}
+                                        onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    >
+                                        <option value="hair">헤어 (Hair)</option>
+                                        <option value="face">얼굴 (Face)</option>
+                                        <option value="outfit">의상 (Outfit)</option>
+                                        <option value="accessory">액세서리 (Accessory)</option>
+                                        <option value="others">기타 (Others)</option>
+                                    </select>
                                 </div>
 
                                 {/* Positioning Inputs */}
@@ -291,9 +335,27 @@ export default function AdminShop() {
                     {/* Item List */}
                     <div className="lg:col-span-3">
                         <div className="bg-white rounded-xl shadow-sm p-6">
-                            <h2 className="text-xl font-bold mb-4 text-gray-800">등록된 아이템 목록 ({items.length})</h2>
+                            <h2 className="text-xl font-bold mb-4 text-gray-800">등록된 아이템 목록 ({filteredItems.length})</h2>
+
+                            {/* Category Filter Tabs */}
+                            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+                                {categories.map((cat) => (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => setSelectedCategory(cat.id as any)}
+                                        className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all ${selectedCategory === cat.id
+                                            ? 'bg-indigo-600 text-white shadow-md'
+                                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                            }`}
+                                    >
+                                        {cat.label}
+                                    </button>
+                                ))}
+                            </div>
+
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
-                                {items.map((item) => {
+                                {filteredItems.map((item) => {
+
                                     const isGlobalItem = item.isGlobal && classCode !== 'GLOBAL';
                                     const isHidden = item.isHidden;
 
@@ -324,8 +386,18 @@ export default function AdminShop() {
                                                 <div>
                                                     <h3 className="font-bold text-gray-800">{item.name}</h3>
                                                     {item.category && (
-                                                        <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1 ${isGlobalItem ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
+                                                        <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1 mr-1 ${isGlobalItem ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
                                                             {item.category}
+                                                        </span>
+                                                    )}
+                                                    {item.requiredLevel && item.requiredLevel > 0 && (
+                                                        <span className="inline-block text-xs px-2 py-0.5 rounded-full mt-1 bg-yellow-100 text-yellow-700 mr-1">
+                                                            Lv. {item.requiredLevel}
+                                                        </span>
+                                                    )}
+                                                    {item.requiredBadge && (
+                                                        <span className="inline-block text-xs px-2 py-0.5 rounded-full mt-1 bg-purple-100 text-purple-700">
+                                                            🏅 {item.requiredBadge}
                                                         </span>
                                                     )}
                                                 </div>

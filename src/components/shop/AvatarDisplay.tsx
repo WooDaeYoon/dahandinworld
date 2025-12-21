@@ -17,7 +17,7 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
 
     return (
         <div
-            className="relative bg-blue-50 rounded-full overflow-hidden border-4 border-blue-100 flex items-center justify-center"
+            className="relative bg-blue-50 rounded-3xl overflow-hidden border-4 border-blue-100 flex items-center justify-center"
             style={{ width: size, height: size }}
         >
             {/* Base Body */}

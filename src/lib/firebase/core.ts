@@ -19,7 +19,10 @@ export interface ShopItem {
     };
     isGlobal?: boolean;
     isHidden?: boolean;
+    requiredLevel?: number; // Minimum level required to purchase
+    requiredBadge?: string; // Required badge title to purchase
 }
+
 
 export interface ChatMessage {
     id?: string;
@@ -178,6 +181,32 @@ export const firebaseService = {
         } catch (error) {
             console.error("Error updating item:", error);
             throw error;
+        }
+    },
+
+    saveUsedCookies: async (classCode: string, studentCode: string, amount: number) => {
+        try {
+            const cookiesRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}/cookies/used`);
+            await setDoc(cookiesRef, { amount }, { merge: true });
+        } catch (error) {
+            console.error("Error saving used cookies:", error);
+            throw error;
+        }
+    },
+
+    // Get any student code for admin use
+    getAnyStudentCode: async (classCode: string): Promise<string | null> => {
+        try {
+            const studentsRef = collection(db, `${getResolvedPath(classCode)}/students`);
+            const q = query(studentsRef, limit(1));
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                return snapshot.docs[0].id; // The document ID is the studentCode
+            }
+            return null;
+        } catch (error) {
+            console.error("Error getting any student:", error);
+            return null;
         }
     },
 
