@@ -211,16 +211,43 @@ export default function SquareSystem() {
                     <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
                         {messages.map((msg) => {
                             const isMe = msg.studentCode === studentCode;
+
+                            // Format timestamp to "2026-02-20, 14:26pm"
+                            let timeString = '';
+                            if (msg.timestamp) {
+                                const date = msg.timestamp.toDate(); // timestamp is Firestore Timestamp
+                                const yyyy = date.getFullYear();
+                                const mm = String(date.getMonth() + 1).padStart(2, '0');
+                                const dd = String(date.getDate()).padStart(2, '0');
+                                let hours = date.getHours();
+                                const minutes = String(date.getMinutes()).padStart(2, '0');
+                                const ampm = hours >= 12 ? 'pm' : 'am';
+
+                                // Convert 24h to 12h format or keep 24h but with pm/am suffix?
+                                // "14:26pm" is redundant but requested. I will output exactly as requested: "HH:MMam/pm" where HH is 24-hr if requested, 
+                                // wait, "14:26pm" implies 24 hour output + am/pm.
+                                // Let's just output `hours` as is, padded.
+                                const paddedHours = String(hours).padStart(2, '0');
+                                timeString = `${yyyy}-${mm}-${dd}, ${paddedHours}:${minutes}${ampm}`;
+                            }
+
                             return (
                                 <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                                     <div className="flex item-center mb-1 gap-1">
                                         {!isMe && <span className="text-xs text-gray-500 font-medium">{msg.studentName}</span>}
                                     </div>
-                                    <div className={`px-3 py-2 rounded-lg text-sm max-w-[90%] break-words shadow-sm ${isMe
-                                        ? 'bg-indigo-500 text-white rounded-tr-none'
-                                        : 'bg-white text-gray-700 border border-gray-200 rounded-tl-none'
-                                        }`}>
-                                        {msg.message}
+                                    <div className={`flex items-end gap-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                        <div className={`px-3 py-2 rounded-lg text-sm max-w-[90%] break-words shadow-sm ${isMe
+                                            ? 'bg-indigo-500 text-white rounded-tr-none'
+                                            : 'bg-white text-gray-700 border border-gray-200 rounded-tl-none'
+                                            }`}>
+                                            {msg.message}
+                                        </div>
+                                        {timeString && (
+                                            <span className="text-[10px] text-gray-400 whitespace-nowrap mb-1">
+                                                {timeString}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             )

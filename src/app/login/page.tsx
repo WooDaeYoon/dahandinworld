@@ -13,6 +13,7 @@ export default function LoginPage() {
     const [inviteCode, setInviteCode] = useState('');
     const [teacherInfo, setTeacherInfo] = useState<any>(null);
     const [studentCode, setStudentCode] = useState('');
+    const [studentTeacherId, setStudentTeacherId] = useState('');
 
     // --- TEACHER STATE ---
     const [apiKey, setApiKey] = useState('');
@@ -41,6 +42,7 @@ export default function LoginPage() {
         setInviteCode('');
         setTeacherInfo(null);
         setStudentCode('');
+        setStudentTeacherId('');
 
         setApiKey('');
         setTeacherId('');
@@ -180,23 +182,21 @@ export default function LoginPage() {
     };
 
     // --- STUDENT LOGIC ---
-    const checkApiKeyForStudent = async (key: string) => {
-        if (!key) return;
-        setApiKey(key);
+    const checkTeacherIdForStudent = async (tId: string) => {
+        if (!tId) return;
         setLoading(true);
         try {
-            // 1. Verify API Key is linked to a Teacher (to get Class Code for DB)
-            const info = await firebaseService.getTeacherInfoByApiKey(key);
+            // Check if Teacher ID exists in DB
+            const info = await firebaseService.getTeacherInfo(tId);
 
             if (info) {
                 setTeacherInfo(info);
             } else {
-                alert("등록되지 않은 API Key입니다. 선생님이 먼저 가입해야 합니다.");
-                setApiKey('');
+                alert("등록되지 않은 선생님 아이디입니다. 아이디를 다시 확인해주세요.");
             }
         } catch (error) {
             console.error(error);
-            alert("API Key 확인 중 오류 발생");
+            alert("선생님 정보 확인 중 오류가 발생했습니다.");
         } finally {
             setLoading(false);
         }
@@ -468,25 +468,25 @@ export default function LoginPage() {
 
                             {!teacherInfo ? (
                                 <div className="animate-fade-in-up text-left">
-                                    <h3 className="text-xl font-bold text-gray-800 mb-6 text-center">API Key 인증</h3>
+                                    <h3 className="text-xl font-bold text-gray-800 mb-6 text-center">선생님 확인</h3>
 
                                     <div className="mb-6">
-                                        <label className="block text-sm font-bold text-gray-700 mb-2">다했니 API Key</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">선생님 아이디</label>
                                         <input
                                             type="text"
-                                            value={apiKey} // Using apiKey state
-                                            onChange={(e) => setApiKey(e.target.value)} // Reusing apiKey state
-                                            placeholder="선생님이 공유해주신 API Key를 입력하세요"
+                                            value={studentTeacherId}
+                                            onChange={(e) => setStudentTeacherId(e.target.value)}
+                                            placeholder="선생님이 알려주신 아이디를 입력하세요"
                                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 outline-none"
                                         />
                                     </div>
 
                                     <button
-                                        onClick={() => checkApiKeyForStudent(apiKey)} // Pass state
-                                        disabled={loading || !apiKey}
+                                        onClick={() => checkTeacherIdForStudent(studentTeacherId)}
+                                        disabled={loading || !studentTeacherId}
                                         className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold text-lg hover:bg-gray-900 shadow-lg"
                                     >
-                                        인증하기
+                                        선생님 찾기
                                     </button>
                                 </div>
                             ) : (
@@ -507,13 +507,13 @@ export default function LoginPage() {
                                             autoFocus={true}
                                         />
                                     </div>
-                                    <p className="text-xs text-gray-400">내 '다했니' 학생 코드 9자리를 입력해주세요.</p>
+                                    <p className="text-xs text-gray-400">내 &apos;다했니&apos; 학생 코드 9자리를 입력해주세요.</p>
 
                                     <button
-                                        onClick={() => { setTeacherInfo(null); setApiKey(''); }}
+                                        onClick={() => { setTeacherInfo(null); setStudentTeacherId(''); }}
                                         className="text-sm text-gray-400 underline hover:text-gray-600 mt-4"
                                     >
-                                        API Key 다시 입력하기
+                                        선생님 아이디 다시 입력하기
                                     </button>
                                 </div>
                             )}

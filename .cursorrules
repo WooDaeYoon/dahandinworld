@@ -1,0 +1,85 @@
+# Dahandin Workspace Rules
+
+You are an AI assistant helping with the Dahandin project, a Next.js web application.
+
+## Tech Stack
+- Framework: Next.js (App Router, v16+)
+- UI/Styling: React 19, Tailwind CSS v4
+- Database/Auth: Firebase v12+
+- Language: TypeScript v5+
+
+## Coding Conventions
+1. **TypeScript & React**: 
+   - Always use TypeScript for new files (`.ts` or `.tsx`).
+   - Use React Server Components by default. Add `'use client'` only when necessary for interactivity or hooks.
+   - Use modern React 19 hooks and patterns.
+2. **Naming Constraints**:
+   - Variables & functions: `camelCase`.
+   - React components & files containing components: `PascalCase`.
+   - Utility and generic files: `camelCase` or `kebab-case`.
+3. **Styling**:
+   - Strictly use **Tailwind CSS v4** utility classes. Do not use ad-hoc vanilla CSS unless unavoidable.
+   - Maintain a cohesive, modern, and engaging design (Tailwind's rich color palette, round corners, gradients etc.).
+
+## Directory Structure & Application Architecture
+Below is the simplified structure of the application. It follows a feature-driven folder organization:
+
+```text
+src/
+├── app/                  # App Router pages and layouts
+│   ├── api/              # API routes
+│   ├── login/            # Authentication pages
+│   ├── shop/             # Store/Shop feature pages
+│   ├── square/           # Community/Square pages
+│   ├── test-db/          # Database testing utilities
+│   ├── layout.tsx        # Global layout
+│   └── page.tsx          # Home page
+├── components/           # Reusable UI components
+│   ├── auth/             # Authentication components
+│   ├── shop/             # Shop-specific UI
+│   ├── square/           # Square-specific UI
+│   └── ui/               # Generic/Shared UI elements
+├── hooks/                # Custom React hooks
+├── lib/                  # Utility functions, Firebase init, shared logic
+└── types/                # TypeScript interfaces and types
+public/                   # Static assets (images, icons)
+```
+- `src/app`: Keep routing logic and page-level data fetching here.
+- `src/components`: Break down complex pages into smaller components here.
+- `src/lib`: Utility functions, Firebase configurations, and shared logic.
+
+## Firebase Database Structure
+The Firestore database follows this structure:
+
+```text
+admin/
+└── global/
+    └── shopItems/
+        ├── item1...
+        ├── item2...
+        └── item3...
+
+schools/
+└── {schoolId}/
+    └── teachers/
+        └── {teacherId}/
+            └── classes/
+                └── {classId}/
+                    ├── shopItems/
+                    └── square_chat/
+
+teachers/
+└── {teacherId} (stores teacher info/metadata)
+```
+
+## Commit Messages
+Use conventional commits format:
+- `feat:` for new features
+- `fix:` for bug fixes
+- `docs:` for documentation changes
+- `refactor:` for code modifications that neither fix a bug nor add a feature
+- `style:` for formatting, missing semi-colons, etc.
+
+## Additional Instructions
+- Always use **absolute paths** with the `@/` alias (e.g., `@/components/...`).
+- When creating UI components, ensure they look premium, responsive, and dynamic, avoiding a basic "MVP" feel.

@@ -24,10 +24,11 @@ export default function StudentShop() {
     const [equippedItems, setEquippedItems] = useState<Record<string, ShopItem>>({});
     const [badges, setBadges] = useState<Record<string, DahandinBadge>>({});
     const [activeTab, setActiveTab] = useState<'shop' | 'inventory'>('shop');
-    const [selectedCategory, setSelectedCategory] = useState<'all' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others'>('all');
+    const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others'>('all');
 
     const categories = [
         { id: 'all', label: '전체' },
+        { id: 'background', label: '배경' },
         { id: 'hair', label: '헤어' },
         { id: 'face', label: '얼굴' },
         { id: 'outfit', label: '의상' },
@@ -406,7 +407,7 @@ export default function StudentShop() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {filteredItems.map((item) => {
                                         const isOwned = inventory.some(invItem => invItem.id === item.id);
-                                        const isOneTimePurchase = ['hair', 'face', 'outfit', 'accessory'].includes(item.category || '');
+                                        const isOneTimePurchase = ['background', 'hair', 'face', 'outfit', 'accessory'].includes(item.category || '');
                                         const isPurchased = isOwned && isOneTimePurchase;
                                         const requiredLevel = item.requiredLevel || 0;
                                         const isLevelInsufficient = requiredLevel > level;

@@ -11,7 +11,7 @@ export interface ShopItem {
     isDonation?: boolean;
     classCode?: string; // Replaces apiKey
     quantity?: number;
-    category?: 'hair' | 'face' | 'outfit' | 'accessory' | 'others';
+    category?: 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others';
     style?: {
         x: number;
         y: number;

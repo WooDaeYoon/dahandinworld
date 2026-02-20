@@ -7,8 +7,8 @@ interface AvatarDisplayProps {
 }
 
 export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDisplayProps) {
-    // Layer Order: Body -> Face -> Outfit -> Hair -> Accessory
-    // Z-Index: 0 -> 10 -> 20 -> 30 -> 40
+    // Layer Order: Background -> Body -> Face -> Outfit -> Hair -> Accessory
+    // Z-Index: -10 -> 0 -> 10 -> 20 -> 30 -> 40
 
     // Base Body Image (Placeholder or Asset)
     // Ideally, this should be a prop or a constant asset path.
@@ -20,6 +20,23 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
             className="relative bg-blue-50 rounded-3xl overflow-hidden border-4 border-blue-100 flex items-center justify-center"
             style={{ width: size, height: size }}
         >
+            {/* Background */}
+            {equippedItems.background && equippedItems.background.imageUrl && (
+                <img
+                    src={equippedItems.background.imageUrl}
+                    alt="Background"
+                    className="absolute object-contain w-full h-full rounded-3xl"
+                    style={{
+                        zIndex: -10,
+                        left: `${equippedItems.background.style?.x || 0}%`,
+                        top: `${equippedItems.background.style?.y || 0}%`,
+                        width: `${equippedItems.background.style?.width || 100}%`,
+                        height: '100%',
+                        objectFit: 'cover', // backgrounds should probably cover the area
+                    }}
+                />
+            )}
+
             {/* Base Body */}
             <img
                 src={defaultBodyUrl}

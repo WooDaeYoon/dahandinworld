@@ -24,10 +24,11 @@ export default function AdminShop() {
     const [classCode, setClassCode] = useState<string | null>(null);
     const [className, setClassName] = useState<string | null>(null);
 
-    const [selectedCategory, setSelectedCategory] = useState<'all' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others'>('all');
+    const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others'>('all');
 
     const categories = [
         { id: 'all', label: '전체' },
+        { id: 'background', label: '배경' },
         { id: 'hair', label: '헤어' },
         { id: 'face', label: '얼굴' },
         { id: 'outfit', label: '의상' },
@@ -236,6 +237,7 @@ export default function AdminShop() {
                                         onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                                     >
+                                        <option value="background">배경 (Background)</option>
                                         <option value="hair">헤어 (Hair)</option>
                                         <option value="face">얼굴 (Face)</option>
                                         <option value="outfit">의상 (Outfit)</option>
@@ -478,6 +480,32 @@ export default function AdminShop() {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Floating Action Buttons */}
+            <div className="fixed right-6 bottom-6 flex flex-col gap-3 z-50">
+                <a
+                    href="https://www.instagram.com/daejibubu_ssam?igsh=MTVkMHJnZ24ycGsybw%3D%3D&utm_source=qr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex text-center items-center justify-center w-48 px-4 py-3 bg-gradient-to-r from-pink-500 to-orange-400 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 group"
+                >
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold opacity-80 leading-tight">개발자 선생님(대지부부)</span>
+                        <span className="font-bold text-sm leading-tight mt-0.5">인스타그램</span>
+                    </div>
+                </a>
+                <a
+                    href="https://open.kakao.com/o/gGA6nnhi"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex text-center items-center justify-center w-48 px-4 py-3 bg-[#FEE500] text-black rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 group"
+                >
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold opacity-80 leading-tight">다했니 월드 사용자를 위한</span>
+                        <span className="font-bold text-sm leading-tight mt-0.5">오픈채팅방</span>
+                    </div>
+                </a>
             </div>
         </div>
     );
