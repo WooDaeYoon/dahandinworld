@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShopItem } from '@/lib/firebase/core';
+import { getProxyImageUrl } from '@/lib/utils';
 
 interface AvatarDisplayProps {
     equippedItems: Record<string, ShopItem>;
@@ -23,7 +24,7 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
             {/* Background */}
             {equippedItems.background && equippedItems.background.imageUrl && (
                 <img
-                    src={equippedItems.background.imageUrl}
+                    src={getProxyImageUrl(equippedItems.background.imageUrl)}
                     alt="Background"
                     className="absolute object-contain w-full h-full rounded-3xl"
                     style={{
@@ -39,7 +40,7 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
 
             {/* Base Body */}
             <img
-                src={defaultBodyUrl}
+                src={getProxyImageUrl(defaultBodyUrl)}
                 alt="Body"
                 className="absolute top-0 left-0 w-full h-full object-contain"
                 style={{ zIndex: 0 }}
@@ -51,7 +52,7 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
             {/* Face */}
             {equippedItems.face && equippedItems.face.imageUrl && (
                 <img
-                    src={equippedItems.face.imageUrl}
+                    src={getProxyImageUrl(equippedItems.face.imageUrl)}
                     alt="Face"
                     className="absolute object-contain"
                     style={{
@@ -66,7 +67,7 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
             {/* Outfit */}
             {equippedItems.outfit && equippedItems.outfit.imageUrl && (
                 <img
-                    src={equippedItems.outfit.imageUrl}
+                    src={getProxyImageUrl(equippedItems.outfit.imageUrl)}
                     alt="Outfit"
                     className="absolute object-contain"
                     style={{
@@ -81,7 +82,7 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
             {/* Hair */}
             {equippedItems.hair && equippedItems.hair.imageUrl && (
                 <img
-                    src={equippedItems.hair.imageUrl}
+                    src={getProxyImageUrl(equippedItems.hair.imageUrl)}
                     alt="Hair"
                     className="absolute object-contain"
                     style={{
@@ -96,7 +97,7 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
             {/* Accessory */}
             {equippedItems.accessory && equippedItems.accessory.imageUrl && (
                 <img
-                    src={equippedItems.accessory.imageUrl}
+                    src={getProxyImageUrl(equippedItems.accessory.imageUrl)}
                     alt="Accessory"
                     className="absolute object-contain"
                     style={{

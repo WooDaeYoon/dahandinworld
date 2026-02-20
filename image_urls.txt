@@ -1,0 +1,3 @@
+Global Item: 일기 쿠폰, ImageUrl: https://firebasestorage.googleapis.com/v0/b/dahandin-world.firebasestorage.app/o/shop%2F1765892205853_diarycoupon.png?alt=media&token=40b55588-aa40-42f0-b0b4-a29ceb56b960
+Global Item: 간식 구입, ImageUrl: https://firebasestorage.googleapis.com/v0/b/dahandin-world.firebasestorage.app/o/shop%2F1765892120586_snack.png?alt=media&token=26020f14-bca9-4b49-9cf0-f61d6d53095a
+Global Item: 기부하기, ImageUrl: https://firebasestorage.googleapis.com/v0/b/dahandin-world.firebasestorage.app/o/shop%2F1765891412524_donation.png?alt=media&token=d0401c8b-99c8-4a2b-8eca-ce23b461b779

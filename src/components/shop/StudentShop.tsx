@@ -6,6 +6,7 @@ import { dahandinClient } from '@/lib/dahandin/client';
 import { DahandinBadge } from '@/types';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import AvatarDisplay from './AvatarDisplay';
+import { getProxyImageUrl } from '@/lib/utils';
 
 export default function StudentShop() {
     const [items, setItems] = useState<ShopItem[]>([]);
@@ -313,7 +314,7 @@ export default function StudentShop() {
                                     <div key={idx} className="flex flex-col items-center" title={badge.title}>
                                         <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center border border-yellow-200 mb-1 overflow-hidden">
                                             {badge.imgUrl ? (
-                                                <img src={badge.imgUrl} alt={badge.title} className="w-full h-full object-cover" />
+                                                <img src={getProxyImageUrl(badge.imgUrl)} alt={badge.title} className="w-full h-full object-cover" />
                                             ) : (
                                                 <span className="text-lg">🏅</span>
                                             )}
@@ -419,7 +420,7 @@ export default function StudentShop() {
                                             <div key={item.id} className={`group border rounded-xl p-4 transition-all duration-300 bg-white border-gray-100 ${isPurchased || isLevelInsufficient ? 'opacity-60' : 'hover:shadow-xl hover:-translate-y-1'}`}>
                                                 <div className="aspect-square bg-gray-50 rounded-lg mb-4 overflow-hidden relative">
                                                     {item.imageUrl ? (
-                                                        <img src={item.imageUrl} alt={item.name} className={`w-full h-full object-cover transition-transform duration-500 ${isPurchased || isLevelInsufficient ? '' : 'group-hover:scale-110'}`} />
+                                                        <img src={getProxyImageUrl(item.imageUrl)} alt={item.name} className={`w-full h-full object-cover transition-transform duration-500 ${isPurchased || isLevelInsufficient ? '' : 'group-hover:scale-110'}`} />
                                                     ) : (
                                                         <div className="flex items-center justify-center h-full text-gray-300 text-5xl">🍪</div>
                                                     )}
@@ -493,7 +494,7 @@ export default function StudentShop() {
                                         <div key={item.id} className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
                                             <div className="aspect-square bg-gray-50 rounded-lg mb-4 overflow-hidden relative">
                                                 {item.imageUrl ? (
-                                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                                    <img src={getProxyImageUrl(item.imageUrl)} alt={item.name} className="w-full h-full object-cover" />
                                                 ) : (
                                                     <div className="flex items-center justify-center h-full text-gray-300 text-5xl">🍪</div>
                                                 )}

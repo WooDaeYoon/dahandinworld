@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { firebaseService, ShopItem } from '@/lib/firebase/core';
 import AvatarDisplay from './AvatarDisplay';
+import { getProxyImageUrl } from '@/lib/utils';
 
 export default function AdminShop() {
     const [items, setItems] = useState<ShopItem[]>([]);
@@ -368,7 +369,7 @@ export default function AdminShop() {
                                         >
                                             <div className="aspect-square bg-gray-100 rounded-md mb-3 overflow-hidden relative group">
                                                 {item.imageUrl ? (
-                                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                                    <img src={getProxyImageUrl(item.imageUrl)} alt={item.name} className="w-full h-full object-cover" />
                                                 ) : (
                                                     <div className="flex items-center justify-center h-full text-gray-400 text-4xl">🍪</div>
                                                 )}
