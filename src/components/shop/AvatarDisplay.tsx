@@ -26,14 +26,13 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
                 <img
                     src={getProxyImageUrl(equippedItems.background.imageUrl)}
                     alt="Background"
-                    className="absolute object-contain w-full h-full rounded-3xl"
+                    className="absolute top-0 left-0 w-full h-full object-cover rounded-3xl"
                     style={{
-                        zIndex: -10,
+                        zIndex: 0, // Changed from -10 to 0 to prevent hiding behind the parent div's background
                         left: `${equippedItems.background.style?.x || 0}%`,
                         top: `${equippedItems.background.style?.y || 0}%`,
                         width: `${equippedItems.background.style?.width || 100}%`,
                         height: '100%',
-                        objectFit: 'cover', // backgrounds should probably cover the area
                     }}
                 />
             )}
