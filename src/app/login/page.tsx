@@ -235,23 +235,29 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#4f46e5] via-[#7c3aed] to-[#db2777] p-4 relative overflow-hidden">
+            {/* Animated background shapes */}
+            <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-white/20 rounded-full mix-blend-overlay filter blur-[100px] animate-blob"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-pink-400/30 rounded-full mix-blend-overlay filter blur-[100px] animate-blob animation-delay-2000"></div>
+            <div className="absolute -bottom-32 left-20 w-[500px] h-[500px] bg-purple-400/30 rounded-full mix-blend-overlay filter blur-[100px] animate-blob animation-delay-4000"></div>
+
             {/* Admin Login Button (Top Right) */}
-            <div className="absolute top-4 right-4">
+            <div className="absolute top-4 right-4 z-20">
                 <button
                     onClick={() => { setView('admin-login'); resetState(); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-full text-xs font-bold text-gray-600 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/30 backdrop-blur-md border border-white/20 rounded-full text-xs font-bold text-white transition-all shadow-lg hover:shadow-xl"
                 >
                     <span>🛠</span> 관리자 로그인
                 </button>
             </div>
 
-            <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden transition-all duration-300">
+            <div className="w-full max-w-lg bg-white/80 backdrop-blur-xl border border-white/50 rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] overflow-hidden transition-all duration-500 relative z-10 hover:shadow-[0_8px_40px_0_rgba(31,38,135,0.5)]">
 
                 {/* Header */}
-                <div className={`p-8 text-center transition-colors duration-300 ${view.startsWith('teacher') || view === 'admin-login' ? 'bg-gray-800' : 'bg-indigo-600'}`}>
-                    <h1 className="text-3xl font-black text-white mb-2">다했니 월드</h1>
-                    <p className={`font-medium ${view.startsWith('teacher') || view === 'admin-login' ? 'text-gray-300' : 'text-indigo-100'}`}>
+                <div className={`p-8 text-center transition-colors duration-500 relative overflow-hidden ${view.startsWith('teacher') || view === 'admin-login' ? 'bg-gray-900/80 backdrop-blur-md' : 'bg-indigo-600/80 backdrop-blur-md'}`}>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    <h1 className="text-4xl font-black text-white mb-2 relative z-10 tracking-tight drop-shadow-md">다했니 월드</h1>
+                    <p className={`font-medium relative z-10 ${view.startsWith('teacher') || view === 'admin-login' ? 'text-gray-300' : 'text-indigo-100'}`}>
                         {view === 'main' && "우리 반 친구들과 함께해요!"}
                         {view === 'student' && "학생 로그인"}
                         {view === 'teacher-login' && "선생님 로그인"}
@@ -263,17 +269,17 @@ export default function LoginPage() {
                 <div className="p-8">
                     {/* VIEW: MAIN */}
                     {view === 'main' && (
-                        <div className="space-y-4">
+                        <div className="space-y-4 animate-fade-in-up">
                             <button
                                 onClick={() => { setView('student'); resetState(); }}
-                                className="w-full py-6 rounded-2xl border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-50 transition-all group flex flex-col items-center justify-center gap-2"
+                                className="w-full py-8 rounded-2xl border-2 border-indigo-200/50 bg-white/60 backdrop-blur-sm hover:bg-white hover:border-indigo-400 hover:shadow-[0_0_25px_rgba(79,70,229,0.2)] transition-all duration-300 group flex flex-col items-center justify-center gap-3 transform hover:-translate-y-1"
                             >
-                                <span className="text-4xl">🎓</span>
-                                <span className="text-xl font-bold text-gray-800 group-hover:text-indigo-700">학생 입장하기</span>
+                                <span className="text-5xl group-hover:scale-110 transition-transform duration-300 drop-shadow-sm">🎓</span>
+                                <span className="text-xl font-extrabold text-gray-800 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-pink-500">학생 입장하기</span>
                             </button>
                             <button
                                 onClick={() => { setView('teacher-login'); resetState(); }}
-                                className="w-full py-4 rounded-xl text-gray-400 hover:text-gray-600 font-medium text-sm transition-colors"
+                                className="w-full py-4 rounded-xl text-gray-500 hover:text-gray-800 font-bold text-sm transition-colors hover:bg-gray-100/50 mt-2"
                             >
                                 선생님이신가요?
                             </button>
@@ -309,7 +315,7 @@ export default function LoginPage() {
                             <button
                                 onClick={handleAdminLogin}
                                 disabled={!adminId || !adminPw}
-                                className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold text-lg hover:bg-gray-900 shadow-lg transform transition active:scale-95 disabled:bg-gray-300 disabled:transform-none"
+                                className="w-full py-4 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl font-bold text-lg hover:from-gray-900 hover:to-black shadow-[0_4px_14px_0_rgba(0,0,0,0.39)] transform transition duration-300 hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:transform-none disabled:shadow-none"
                             >
                                 관리자 입장
                             </button>
@@ -346,7 +352,7 @@ export default function LoginPage() {
                             <button
                                 onClick={handleTeacherLogin}
                                 disabled={loading || !loginTeacherId || !apiKey}
-                                className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold text-lg hover:bg-gray-900 shadow-lg transform transition active:scale-95 disabled:bg-gray-300 disabled:transform-none"
+                                className="w-full py-4 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl font-bold text-lg hover:from-gray-900 hover:to-black shadow-[0_4px_14px_0_rgba(0,0,0,0.39)] transform transition duration-300 hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:transform-none disabled:shadow-none"
                             >
                                 {loading ? '인증 및 입장...' : '입장하기'}
                             </button>
@@ -385,7 +391,7 @@ export default function LoginPage() {
                                     <button
                                         onClick={handleVerifyApiKey}
                                         disabled={loading || isVerified || !apiKey}
-                                        className="px-6 py-3 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-900 disabled:bg-gray-300"
+                                        className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:from-indigo-700 hover:to-purple-700 shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] transform transition duration-300 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:transform-none disabled:shadow-none"
                                     >
                                         인증
                                     </button>
@@ -450,7 +456,7 @@ export default function LoginPage() {
                                     <button
                                         onClick={handleTeacherRegister}
                                         disabled={loading || !teacherId || !selectedClass || !schoolName || !teacherName}
-                                        className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold text-lg hover:bg-gray-900 shadow-lg transform transition active:scale-95 disabled:bg-gray-300 disabled:transform-none"
+                                        className="w-full py-4 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl font-bold text-lg hover:from-gray-900 hover:to-black shadow-[0_4px_14px_0_rgba(0,0,0,0.39)] transform transition duration-300 hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:transform-none disabled:shadow-none"
                                     >
                                         {loading ? '가입 완료' : '가입하기'}
                                     </button>
@@ -484,7 +490,7 @@ export default function LoginPage() {
                                     <button
                                         onClick={() => checkTeacherIdForStudent(studentTeacherId)}
                                         disabled={loading || !studentTeacherId}
-                                        className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold text-lg hover:bg-gray-900 shadow-lg"
+                                        className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-lg hover:from-indigo-700 hover:to-purple-700 shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] transform transition duration-300 hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:transform-none disabled:shadow-none"
                                     >
                                         선생님 찾기
                                     </button>
@@ -529,15 +535,30 @@ export default function LoginPage() {
                     background: transparent;
                 }
                 .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background-color: #e5e7eb;
+                    background-color: rgba(229, 231, 235, 0.5);
                     border-radius: 20px;
                 }
                 @keyframes fade-in-up {
-                    0% { opacity: 0; transform: translateY(10px); }
+                    0% { opacity: 0; transform: translateY(15px); }
                     100% { opacity: 1; transform: translateY(0); }
                 }
                 .animate-fade-in-up {
-                    animation: fade-in-up 0.5s ease-out forwards;
+                    animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                }
+                @keyframes blob {
+                    0% { transform: translate(0px, 0px) scale(1); }
+                    33% { transform: translate(30px, -50px) scale(1.1); }
+                    66% { transform: translate(-20px, 20px) scale(0.9); }
+                    100% { transform: translate(0px, 0px) scale(1); }
+                }
+                .animate-blob {
+                    animation: blob 7s infinite;
+                }
+                .animation-delay-2000 {
+                    animation-delay: 2s;
+                }
+                .animation-delay-4000 {
+                    animation-delay: 4s;
                 }
             `}</style>
         </div>

@@ -210,6 +210,19 @@ export const firebaseService = {
         }
     },
 
+    // Get all students in a class
+    getClassStudents: async (classCode: string): Promise<any[]> => {
+        try {
+            if (!classCode) return [];
+            const studentsRef = collection(db, `${getResolvedPath(classCode)}/students`);
+            const snapshot = await getDocs(studentsRef);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (error) {
+            console.error("Error getting class students:", error);
+            return [];
+        }
+    },
+
     // --- INVENTORY & STUDENT DATA (Scoped to Class) ---
 
     // Purchase Item
@@ -537,7 +550,19 @@ export const firebaseService = {
             const formData = new FormData();
             formData.append('file', file);
             const response = await fetch('/api/upload', { method: 'POST', body: formData });
-            if (!response.ok) throw new Error('Upload failed');
+
+            if (!response.ok) {
+                let errorDetails = '';
+                try {
+                    const errorData = await response.json();
+                    errorDetails = JSON.stringify(errorData);
+                } catch (e) {
+                    errorDetails = await response.text();
+                }
+                console.error("Server returned error:", response.status, errorDetails);
+                throw new Error(`Upload failed: ${errorDetails}`);
+            }
+
             const data = await response.json();
             return data.url;
         } catch (error) {
