@@ -235,11 +235,25 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#4f46e5] via-[#7c3aed] to-[#db2777] p-4 relative overflow-hidden">
+        <div className="min-h-screen flex items-center justify-center bg-black p-4 relative overflow-hidden">
+            {/* Video Background */}
+            <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover opacity-90 z-0"
+            >
+                <source src="/assets/background/login-bg.mp4" type="video/mp4" />
+            </video>
+
+            {/* Subtle Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 via-purple-900/10 to-pink-900/10 z-0 mix-blend-multiply"></div>
+
             {/* Animated background shapes */}
-            <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-white/20 rounded-full mix-blend-overlay filter blur-[100px] animate-blob"></div>
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-pink-400/30 rounded-full mix-blend-overlay filter blur-[100px] animate-blob animation-delay-2000"></div>
-            <div className="absolute -bottom-32 left-20 w-[500px] h-[500px] bg-purple-400/30 rounded-full mix-blend-overlay filter blur-[100px] animate-blob animation-delay-4000"></div>
+            <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-white/20 rounded-full mix-blend-overlay filter blur-[100px] animate-blob z-0"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-pink-400/30 rounded-full mix-blend-overlay filter blur-[100px] animate-blob animation-delay-2000 z-0"></div>
+            <div className="absolute -bottom-32 left-20 w-[500px] h-[500px] bg-purple-400/30 rounded-full mix-blend-overlay filter blur-[100px] animate-blob animation-delay-4000 z-0"></div>
 
             {/* Admin Login Button (Top Right) */}
             <div className="absolute top-4 right-4 z-20">
