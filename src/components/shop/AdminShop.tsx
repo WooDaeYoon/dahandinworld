@@ -146,7 +146,7 @@ export default function AdminShop() {
                 imageUrl = await firebaseService.uploadImage(imageFile);
             }
 
-            await firebaseService.addItem(classCode, {
+            const payload: any = {
                 name: newItem.name!,
                 price: newItem.price || 0,
                 imageUrl: imageUrl,
@@ -154,9 +154,15 @@ export default function AdminShop() {
                 category: itemType === 'consumable' ? 'others' : newItem.category,
                 requiredLevel: newItem.requiredLevel || 0,
                 requiredBadge: newItem.requiredBadge || '',
-                isConsumable: itemType === 'consumable',
-                style: itemType === 'consumable' ? undefined : newItem.style,
-            });
+                isConsumable: itemType === 'consumable'
+            };
+
+            if (itemType !== 'consumable' && newItem.style) {
+                payload.style = newItem.style;
+            }
+
+            await firebaseService.addItem(classCode, payload);
+
 
             setNewItem({
                 name: '',
@@ -806,19 +812,19 @@ export default function AdminShop() {
                                             총 {squareParticipants.length}명
                                         </span>
                                     </h3>
-                                    <div className="flex gap-2 w-full sm:w-auto">
+                                    <div className="flex flex-wrap gap-2 w-full sm:w-auto mt-3 sm:mt-0 justify-end">
                                         <button
                                             onClick={handleDownloadChat}
-                                            className="flex-1 sm:flex-none px-3 py-1.5 bg-blue-100 text-blue-700 font-bold rounded-lg hover:bg-blue-200 transition-colors shadow-sm text-sm flex justify-center items-center gap-1"
+                                            className="flex-1 sm:flex-none px-3 py-1.5 bg-blue-100 text-blue-700 font-bold rounded-lg hover:bg-blue-200 transition-colors shadow-sm text-sm flex justify-center items-center gap-1 whitespace-nowrap shrink-0"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                                             대화목록 다운로드
                                         </button>
                                         <button
                                             onClick={handleKickAll}
-                                            className="flex-1 sm:flex-none px-3 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg hover:bg-red-200 transition-colors shadow-sm text-sm"
+                                            className="flex-1 sm:flex-none px-3 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg hover:bg-red-200 transition-colors shadow-sm text-sm whitespace-nowrap shrink-0"
                                         >
-                                            전체 내보내기
+                                            학생 전체 내보내기
                                         </button>
                                     </div>
                                 </div>
