@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { firebaseService, SquareParticipant, ChatMessage, ShopItem } from '@/lib/firebase/core';
 import AvatarDisplay from '../shop/AvatarDisplay';
 
 export default function SquareSystem() {
+    const router = useRouter();
     const [classCode, setClassCode] = useState<string | null>(null);
     const [studentCode, setStudentCode] = useState<string | null>(null);
     const [studentName, setStudentName] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export default function SquareSystem() {
             joinSquare(storedClass, storedCode, storedName);
         } else {
             alert("로그인 정보가 없습니다.");
-            window.location.href = '/login';
+            router.replace('/login');
         }
 
         return () => {
@@ -99,12 +101,14 @@ export default function SquareSystem() {
         if (amIParticipant) {
             hasJoinedRef.current = true;
         } else if (hasJoinedRef.current && !amIParticipant) {
-            // Was joined, but now not in participants -> kicked out!
             hasJoinedRef.current = false;
-            alert("선생님에 의해 광장에서 내보내졌습니다.");
-            window.location.href = '/shop';
+            // Delay alert slightly to let DOM unmount processing finish properly
+            setTimeout(() => {
+                alert("선생님에 의해 광장에서 내보내졌습니다.");
+                router.replace('/shop');
+            }, 100);
         }
-    }, [participants, studentCode]);
+    }, [participants, studentCode, router]);
 
     // Cleanup bubbles timer
     useEffect(() => {
@@ -156,7 +160,7 @@ export default function SquareSystem() {
         if (classCode && studentCode) {
             await firebaseService.leaveSquare(classCode, studentCode);
         }
-        window.location.href = '/shop';
+        router.push('/shop');
     };
 
     const handleLogout = async () => {
