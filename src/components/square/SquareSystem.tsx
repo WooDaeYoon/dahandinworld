@@ -17,6 +17,7 @@ export default function SquareSystem() {
     const [bubbles, setBubbles] = useState<Record<string, { message: string, expiresAt: number }>>({});
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const hasJoinedRef = useRef(false);
 
     // Pre-define default square config
     const [squareConfig, setSquareConfig] = useState<{ background: string }>({ background: 'bg.png' });
@@ -88,6 +89,22 @@ export default function SquareSystem() {
             unsubChat();
         };
     }, [classCode]);
+
+    // Handle Kicked Out (Detect if self is removed from participants)
+    useEffect(() => {
+        if (!studentCode) return;
+
+        const amIParticipant = participants.some(p => p.studentCode === studentCode);
+
+        if (amIParticipant) {
+            hasJoinedRef.current = true;
+        } else if (hasJoinedRef.current && !amIParticipant) {
+            // Was joined, but now not in participants -> kicked out!
+            hasJoinedRef.current = false;
+            alert("선생님에 의해 광장에서 내보내졌습니다.");
+            window.location.href = '/shop';
+        }
+    }, [participants, studentCode]);
 
     // Cleanup bubbles timer
     useEffect(() => {
