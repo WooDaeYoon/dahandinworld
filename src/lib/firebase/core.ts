@@ -21,6 +21,7 @@ export interface ShopItem {
     isHidden?: boolean;
     requiredLevel?: number; // Minimum level required to purchase
     requiredBadge?: string; // Required badge title to purchase
+    isConsumable?: boolean; // True if item is a consumable/coupon
 }
 
 
@@ -250,9 +251,51 @@ export const firebaseService = {
             if (!classCode) return [];
             const inventoryRef = collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/inventory`);
             const snapshot = await getDocs(inventoryRef);
-            return snapshot.docs.map(doc => doc.data() as ShopItem);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShopItem));
         } catch (error) {
             console.error("Error getting inventory:", error);
+            return [];
+        }
+    },
+
+    // Use Consumable Item
+    useConsumableItem: async (classCode: string, studentCode: string, itemId: string) => {
+        try {
+            if (!classCode || !studentCode || !itemId) return;
+            const inventoryRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}/inventory`, itemId);
+            const docSnap = await getDoc(inventoryRef);
+
+            if (docSnap.exists()) {
+                const currentQty = docSnap.data().quantity || 1;
+                if (currentQty > 1) {
+                    await updateDoc(inventoryRef, { quantity: increment(-1) });
+                } else {
+                    await deleteDoc(inventoryRef);
+                }
+            }
+        } catch (error) {
+            console.error("Error using consumable:", error);
+            throw error;
+        }
+    },
+
+    // Get Class Consumable Inventories
+    getAllConsumableItems: async (classCode: string): Promise<{ student: any, items: ShopItem[] }[]> => {
+        try {
+            const studentsRef = collection(db, `${getResolvedPath(classCode)}/students`);
+            const snapshot = await getDocs(studentsRef);
+            const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            const promises = students.map(async (student) => {
+                const inventoryRef = collection(db, `${getResolvedPath(classCode)}/students/${student.id}/inventory`);
+                const invSnap = await getDocs(inventoryRef);
+                const items = invSnap.docs.map(d => ({ id: d.id, ...d.data() } as ShopItem));
+                const consumables = items.filter(item => item.isConsumable);
+                return { student, items: consumables };
+            });
+            return await Promise.all(promises);
+        } catch (error) {
+            console.error("Error getting all consumables:", error);
             return [];
         }
     },
@@ -400,7 +443,41 @@ export const firebaseService = {
         }
     },
 
-    // --- SQUARE SYSTEM (Real-time) ---
+    // --- SQUARE SYSTEM (Real-time & Config) ---
+
+    // Square Config (Background, etc)
+    updateSquareConfig: async (classCode: string, config: { background?: string }) => {
+        try {
+            const configRef = doc(db, `${getResolvedPath(classCode)}/settings/square`);
+            await setDoc(configRef, { ...config, updatedAt: new Date().toISOString() }, { merge: true });
+        } catch (error) {
+            console.error("Error updating square config:", error);
+        }
+    },
+
+    getSquareConfig: async (classCode: string) => {
+        try {
+            const configRef = doc(db, `${getResolvedPath(classCode)}/settings/square`);
+            const snap = await getDoc(configRef);
+            return snap.exists() ? snap.data() : { background: 'bg.png' };
+        } catch (error) {
+            console.error("Error getting square config:", error);
+            return { background: 'bg.png' };
+        }
+    },
+
+    subscribeToSquareConfig: (classCode: string, callback: (config: any) => void) => {
+        if (!classCode) return () => { };
+        const configRef = doc(db, `${getResolvedPath(classCode)}/settings/square`);
+
+        return onSnapshot(configRef, (doc) => {
+            if (doc.exists()) {
+                callback(doc.data());
+            } else {
+                callback({ background: 'bg.png' });
+            }
+        });
+    },
 
     // Enter Square (Update Presence)
     enterSquare: async (classCode: string, studentCode: string, name: string, avatarConfig: any) => {
@@ -460,6 +537,28 @@ export const firebaseService = {
             snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() } as ChatMessage));
             callback(messages.reverse()); // Show newest at bottom
         });
+    },
+
+    // Kick all students from Square
+    kickAllFromSquare: async (classCode: string) => {
+        if (!classCode) return;
+        const onlineRef = collection(db, `${getResolvedPath(classCode)}/square_online`);
+        const snapshot = await getDocs(onlineRef);
+        const deletePromises = snapshot.docs.map(docSnap => deleteDoc(docSnap.ref));
+        await Promise.all(deletePromises);
+    },
+
+    // Get all chat messages for a class
+    getAllChatMessages: async (classCode: string): Promise<ChatMessage[]> => {
+        if (!classCode) return [];
+        const q = query(
+            collection(db, `${getResolvedPath(classCode)}/square_chat`),
+            orderBy('timestamp', 'asc') // chronological order for download
+        );
+        const snapshot = await getDocs(q);
+        const messages: ChatMessage[] = [];
+        snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() } as ChatMessage));
+        return messages;
     },
 
     // --- TEACHER ACCOUNT SYSTEM ---

@@ -18,6 +18,9 @@ export default function SquareSystem() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
+    // Pre-define default square config
+    const [squareConfig, setSquareConfig] = useState<{ background: string }>({ background: 'bg.png' });
+
     useEffect(() => {
         const storedClass = localStorage.getItem('classCode');
         const storedCode = localStorage.getItem('studentCode');
@@ -50,6 +53,13 @@ export default function SquareSystem() {
             setParticipants(users);
         });
 
+        // Config Subscription
+        const unsubConfig = firebaseService.subscribeToSquareConfig(classCode, (config) => {
+            if (config) {
+                setSquareConfig({ background: config.background || 'bg.png' });
+            }
+        });
+
         const unsubChat = firebaseService.subscribeToChat(classCode, (msgs) => {
             setMessages(msgs);
             // Update bubbles for new messages
@@ -74,6 +84,7 @@ export default function SquareSystem() {
 
         return () => {
             unsubParticipants();
+            unsubConfig();
             unsubChat();
         };
     }, [classCode]);
@@ -168,8 +179,18 @@ export default function SquareSystem() {
 
             <div className="flex-1 flex overflow-hidden">
                 {/* Main Square Area (Avatars) */}
-                <div className="flex-1 relative p-8 pt-24 overflow-y-auto custom-scrollbar">
-                    <div className="flex flex-wrap gap-12 justify-center content-start min-h-full">
+                <div
+                    className="flex-1 relative p-8 pt-24 overflow-y-auto custom-scrollbar bg-cover bg-center bg-no-repeat transition-all duration-500"
+                    style={{
+                        backgroundImage: `url('/images/square/${squareConfig.background || 'bg.png'}')`,
+                        backgroundColor: '#d1fae5' // fallback green-50
+                    }}
+                >
+                    {/* Shadow overlay for depth */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
+
+                    {/* Avatars Container */}
+                    <div className="flex flex-wrap gap-12 justify-center content-start min-h-full relative z-10 w-full">
                         {participants.map((user) => (
                             <div key={user.studentCode} className="relative flex flex-col items-center">
                                 {/* Speech Bubble */}
@@ -181,18 +202,20 @@ export default function SquareSystem() {
                                 )}
 
                                 {/* Avatar */}
-                                <div className="relative transform transition-transform hover:scale-110 duration-300">
+                                <div className="relative transform transition-transform hover:scale-110 duration-300 drop-shadow-xl">
                                     <AvatarDisplay
                                         equippedItems={user.avatarConfig || {}}
                                         size={140}
                                     />
                                     {/* Name Tag */}
-                                    <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm whitespace-nowrap">
+                                    <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 bg-black/60 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm whitespace-nowrap shadow-md">
                                         {user.name}
                                     </div>
                                     {/* Me Indicator */}
                                     {user.studentCode === studentCode && (
-                                        <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-indigo-500 w-2 h-2 rounded-full ring-2 ring-white"></div>
+                                        <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                                            <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-yellow-400 animate-bounce drop-shadow"></div>
+                                        </div>
                                     )}
                                 </div>
                             </div>

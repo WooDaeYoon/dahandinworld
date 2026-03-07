@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { firebaseService, ShopItem } from '@/lib/firebase/core';
+import { firebaseService, ShopItem, SquareParticipant } from '@/lib/firebase/core';
 import AvatarDisplay from './AvatarDisplay';
 import { getProxyImageUrl } from '@/lib/utils';
 
@@ -25,9 +25,17 @@ export default function AdminShop() {
     const [classCode, setClassCode] = useState<string | null>(null);
     const [className, setClassName] = useState<string | null>(null);
 
-    const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others'>('all');
-    const [activeTab, setActiveTab] = useState<'shop' | 'students'>('shop');
+    const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others' | 'consumable'>('all');
+    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square'>('shop');
     const [students, setStudents] = useState<any[]>([]);
+    const [itemType, setItemType] = useState<'permanent' | 'consumable'>('permanent');
+    const [couponsData, setCouponsData] = useState<{ student: any, items: ShopItem[] }[]>([]);
+    const [loadingCoupons, setLoadingCoupons] = useState(false);
+    const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
+
+    // Square Management State
+    const [squareParticipants, setSquareParticipants] = useState<SquareParticipant[]>([]);
+    const [squareConfig, setSquareConfig] = useState<{ background?: string }>({ background: 'bg.png' });
 
     const categories = [
         { id: 'all', label: '전체' },
@@ -37,6 +45,7 @@ export default function AdminShop() {
         { id: 'outfit', label: '의상' },
         { id: 'accessory', label: '액세서리' },
         { id: 'others', label: '기타' },
+        { id: 'consumable', label: '🎟️ 쿠폰/소모품' },
     ];
 
     const fetchStudents = async (code: string) => {
@@ -45,6 +54,30 @@ export default function AdminShop() {
             setStudents(fetchedStudents);
         } catch (error) {
             console.error("Failed to fetch students:", error);
+        }
+    };
+
+    const fetchCoupons = async (code: string) => {
+        setLoadingCoupons(true);
+        try {
+            const data = await firebaseService.getAllConsumableItems(code);
+            setCouponsData(data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoadingCoupons(false);
+        }
+    };
+
+    const handleUseCoupon = async (studentCode: string, itemId: string) => {
+        if (!classCode) return;
+        if (!confirm("해당 학생의 쿠폰 1개를 사용 완료 처리하시겠습니까?")) return;
+        try {
+            await firebaseService.useConsumableItem(classCode, studentCode, itemId);
+            alert("사용 완료 처리되었습니다.");
+            fetchCoupons(classCode);
+        } catch (error) {
+            alert("처리 중 오류가 발생했습니다.");
         }
     };
 
@@ -59,6 +92,7 @@ export default function AdminShop() {
             fetchItems(storedClassCode);
             if (storedClassCode !== 'GLOBAL') {
                 fetchStudents(storedClassCode);
+                fetchCoupons(storedClassCode);
             }
         } else {
             alert("학급 정보가 없습니다. 다시 로그인해주세요.");
@@ -81,6 +115,24 @@ export default function AdminShop() {
         }
     };
 
+    // Set up Square Management Subscription
+    useEffect(() => {
+        if (!classCode || classCode === 'GLOBAL' || activeTab !== 'square') return;
+
+        const unsubParticipants = firebaseService.subscribeToSquare(classCode, (users) => {
+            setSquareParticipants(users);
+        });
+
+        const unsubConfig = firebaseService.subscribeToSquareConfig(classCode, (config) => {
+            setSquareConfig(config || { background: 'bg.png' });
+        });
+
+        return () => {
+            unsubParticipants();
+            unsubConfig();
+        };
+    }, [classCode, activeTab]);
+
     const handleAddItem = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newItem.name || (newItem.price !== undefined && newItem.price < 0)) return;
@@ -99,10 +151,11 @@ export default function AdminShop() {
                 price: newItem.price || 0,
                 imageUrl: imageUrl,
                 isDonation: newItem.isDonation || false,
-                category: newItem.category,
+                category: itemType === 'consumable' ? 'others' : newItem.category,
                 requiredLevel: newItem.requiredLevel || 0,
                 requiredBadge: newItem.requiredBadge || '',
-                style: newItem.style,
+                isConsumable: itemType === 'consumable',
+                style: itemType === 'consumable' ? undefined : newItem.style,
             });
 
             setNewItem({
@@ -115,6 +168,7 @@ export default function AdminShop() {
                 requiredBadge: '',
                 style: { x: 0, y: 0, width: 100 }
             });
+            setItemType('permanent');
             setImageFile(null);
             fetchItems(classCode);
             alert("아이템이 추가되었습니다!");
@@ -154,6 +208,53 @@ export default function AdminShop() {
         window.location.href = '/login';
     };
 
+    const handleKickAll = async () => {
+        if (!classCode) return;
+        if (!confirm("광장에 접속 중인 모든 학생을 강제로 내보내시겠습니까?\n\n(참고: 내보내진 학생은 자동으로 상점 화면으로 돌아갑니다.)")) return;
+
+        try {
+            await firebaseService.kickAllFromSquare(classCode);
+            alert("모든 학생을 내보냈습니다.");
+        } catch (error) {
+            console.error(error);
+            alert("내보내기 중 오류가 발생했습니다.");
+        }
+    };
+
+    const handleDownloadChat = async () => {
+        if (!classCode) return;
+        try {
+            const messages = await firebaseService.getAllChatMessages(classCode);
+            if (messages.length === 0) {
+                alert("다운로드할 대화록이 없습니다.");
+                return;
+            }
+
+            // Create text content
+            let content = `--- 다했니 광장 대화록 (${classCode}) ---\n\n`;
+            messages.forEach(msg => {
+                const date = msg.timestamp ? msg.timestamp.toDate() : new Date();
+                const timeStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+                content += `[${timeStr}] ${msg.studentName} (${msg.studentCode}): ${msg.message}\n`;
+            });
+
+            // Create blob and download link
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `광장대화록_${classCode}_${new Date().getTime()}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error(error);
+            alert("대화록 저장 중 오류가 발생했습니다.");
+        }
+    };
+
     const handleToggleVisibility = async (itemId: string, currentHidden: boolean) => {
         if (!classCode) return;
         try {
@@ -168,7 +269,11 @@ export default function AdminShop() {
         }
     };
 
-    const filteredItems = items.filter(item => selectedCategory === 'all' || item.category === selectedCategory);
+    const filteredItems = items.filter(item => {
+        if (selectedCategory === 'all') return true;
+        if (selectedCategory === 'consumable') return item.isConsumable === true;
+        return item.category === selectedCategory && !item.isConsumable;
+    });
 
 
     return (
@@ -190,7 +295,7 @@ export default function AdminShop() {
                 </header>
 
                 {classCode && classCode !== 'GLOBAL' && (
-                    <div className="flex gap-4 mb-8 border-b pb-4">
+                    <div className="flex gap-4 mb-8 border-b pb-4 overflow-x-auto whitespace-nowrap scrollbar-hide">
                         <button
                             onClick={() => setActiveTab('shop')}
                             className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'shop' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
@@ -202,6 +307,18 @@ export default function AdminShop() {
                             className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'students' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             👨‍🎓 우리 반 아바타 보기
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('coupons'); setSelectedCouponId(null); classCode && fetchCoupons(classCode); }}
+                            className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'coupons' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            🎟️ 쿠폰 관리
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('square')}
+                            className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'square' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            🌳 광장 관리
                         </button>
                     </div>
                 )}
@@ -216,6 +333,22 @@ export default function AdminShop() {
                                 <h2 className="text-xl font-bold mb-4 text-gray-800">
                                     {classCode === 'GLOBAL' ? '공통 아이템 추가' : '우리 반 아이템 추가'}
                                 </h2>
+                                <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
+                                    <button
+                                        type="button"
+                                        onClick={() => setItemType('permanent')}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${itemType === 'permanent' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        ✨ 아바타 꾸미기 (영구)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setItemType('consumable')}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${itemType === 'consumable' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        🎟️ 쿠폰 / 소모품
+                                    </button>
+                                </div>
                                 <form onSubmit={handleAddItem} className="space-y-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">아이템 이름</label>
@@ -262,55 +395,59 @@ export default function AdminShop() {
                                         />
                                     </div>
 
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                                        <select
-                                            value={newItem.category || 'accessory'}
-                                            onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        >
-                                            <option value="background">배경 (Background)</option>
-                                            <option value="hair">헤어 (Hair)</option>
-                                            <option value="face">얼굴 (Face)</option>
-                                            <option value="outfit">의상 (Outfit)</option>
-                                            <option value="accessory">액세서리 (Accessory)</option>
-                                            <option value="others">기타 (Others)</option>
-                                        </select>
-                                    </div>
+                                    {itemType === 'permanent' && (
+                                        <>
+                                            <div className="mb-4">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+                                                <select
+                                                    value={newItem.category || 'accessory'}
+                                                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                >
+                                                    <option value="background">배경 (Background)</option>
+                                                    <option value="hair">헤어 (Hair)</option>
+                                                    <option value="face">얼굴 (Face)</option>
+                                                    <option value="outfit">의상 (Outfit)</option>
+                                                    <option value="accessory">액세서리 (Accessory)</option>
+                                                    <option value="others">기타 (Others)</option>
+                                                </select>
+                                            </div>
 
-                                    {/* Positioning Inputs */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                        <h3 className="text-sm font-bold text-gray-700 mb-3">📍 아이템 위치/크기 조정</h3>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-500 mb-1">X 위치 (%)</label>
-                                                <input
-                                                    type="number"
-                                                    value={newItem.style?.x || 0}
-                                                    onChange={(e) => setNewItem({ ...newItem, style: { ...newItem.style!, x: Number(e.target.value) } })}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
-                                                />
+                                            {/* Positioning Inputs */}
+                                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                                <h3 className="text-sm font-bold text-gray-700 mb-3">📍 아이템 위치/크기 조정</h3>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-500 mb-1">X 위치 (%)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={newItem.style?.x || 0}
+                                                            onChange={(e) => setNewItem({ ...newItem, style: { ...newItem.style!, x: Number(e.target.value) } })}
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Y 위치 (%)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={newItem.style?.y || 0}
+                                                            onChange={(e) => setNewItem({ ...newItem, style: { ...newItem.style!, y: Number(e.target.value) } })}
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-500 mb-1">크기 (%)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={newItem.style?.width || 100}
+                                                            onChange={(e) => setNewItem({ ...newItem, style: { ...newItem.style!, width: Number(e.target.value) } })}
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-500 mb-1">Y 위치 (%)</label>
-                                                <input
-                                                    type="number"
-                                                    value={newItem.style?.y || 0}
-                                                    onChange={(e) => setNewItem({ ...newItem, style: { ...newItem.style!, y: Number(e.target.value) } })}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-gray-500 mb-1">크기 (%)</label>
-                                                <input
-                                                    type="number"
-                                                    value={newItem.style?.width || 100}
-                                                    onChange={(e) => setNewItem({ ...newItem, style: { ...newItem.style!, width: Number(e.target.value) } })}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-indigo-500"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
+                                        </>
+                                    )}
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">아이템 이미지</label>
@@ -512,7 +649,7 @@ export default function AdminShop() {
                             </div>
                         </div>
                     </div>
-                ) : (
+                ) : activeTab === 'students' ? (
                     <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
                         <div className="mb-6 border-b pb-4 flex justify-between items-center">
                             <h2 className="text-xl font-bold text-gray-800">
@@ -546,7 +683,211 @@ export default function AdminShop() {
                             </div>
                         )}
                     </div>
-                )}
+                ) : activeTab === 'coupons' ? (
+                    <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                        <div className="mb-6 border-b pb-4 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                {selectedCouponId && (
+                                    <button
+                                        onClick={() => setSelectedCouponId(null)}
+                                        className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                                        title="뒤로 가기"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600"><path d="m15 18-6-6 6-6" /></svg>
+                                    </button>
+                                )}
+                                <h2 className="text-xl font-bold text-gray-800">
+                                    {selectedCouponId ? `${items.find(i => i.id === selectedCouponId)?.name || '쿠폰'} 보유 학생 전체보기` : '쿠폰(소모성 아이템) 목록'}
+                                </h2>
+                            </div>
+                            <button
+                                onClick={() => classCode && fetchCoupons(classCode)}
+                                className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-md text-sm font-bold hover:bg-emerald-100 transition-colors"
+                            >
+                                새로고침
+                            </button>
+                        </div>
+
+                        {loadingCoupons ? (
+                            <div className="text-center py-12 text-gray-500">불러오는 중...</div>
+                        ) : !selectedCouponId ? (
+                            // 쿠폰 종류 목록 표시
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                {items.filter(item => item.isConsumable).length === 0 ? (
+                                    <div className="col-span-full text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                        <p>등록된 쿠폰이 없어요.</p>
+                                    </div>
+                                ) : (
+                                    items.filter(item => item.isConsumable).map(coupon => (
+                                        <button
+                                            key={coupon.id}
+                                            onClick={() => setSelectedCouponId(coupon.id!)}
+                                            className="flex flex-col items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-emerald-300 transition-all text-center group"
+                                        >
+                                            <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center overflow-hidden group-hover:bg-emerald-100 transition-colors">
+                                                {coupon.imageUrl ? (
+                                                    <img src={getProxyImageUrl(coupon.imageUrl)} alt={coupon.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <span className="text-3xl">🎟️</span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-gray-800">{coupon.name}</h3>
+                                                <p className="text-xs text-gray-500 mt-1">상세 보기 &rarr;</p>
+                                            </div>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        ) : (
+                            // 특정 쿠폰 보유 학생 목록
+                            <div className="flex flex-col gap-4">
+                                {(() => {
+                                    // 해당 쿠폰을 가진 학생 필터링
+                                    const studentsWithCoupon = couponsData
+                                        .map(({ student, items }) => ({
+                                            student,
+                                            couponItem: items.find(i => i.id === selectedCouponId)
+                                        }))
+                                        .filter(data => data.couponItem && data.couponItem.quantity! > 0);
+
+                                    if (studentsWithCoupon.length === 0) {
+                                        return (
+                                            <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                                <p>이 쿠폰을 보유한 학생이 없습니다.</p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return studentsWithCoupon.map(({ student, couponItem }) => (
+                                        <div key={student.id} className="border border-gray-200 rounded-lg p-5 bg-gray-50 flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-white rounded-full border border-gray-200 flex items-center justify-center overflow-hidden">
+                                                    <AvatarDisplay equippedItems={student.equippedItems || {}} size={40} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-gray-800 text-lg">{student.name || '이름 없음'}</h3>
+                                                    {student.studentCode && <p className="text-xs text-gray-500">학번: {student.studentCode}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-sm text-gray-500 font-medium">보유 수량</span>
+                                                    <span className="text-lg font-bold text-emerald-600">{couponItem!.quantity || 1}개</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => couponItem!.id && handleUseCoupon(student.id, couponItem!.id)}
+                                                    className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg hover:bg-emerald-200 transition-colors shadow-sm"
+                                                >
+                                                    1개 사용
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ));
+                                })()}
+                            </div>
+                        )}
+                    </div>
+                ) : activeTab === 'square' ? (
+                    <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                        <div className="mb-6 border-b pb-4">
+                            <h2 className="text-xl font-bold text-gray-800">🌳 광장 관리</h2>
+                            <p className="text-sm text-gray-500 mt-1">우리 반 광장의 배경과 접속 중인 학생들을 관리합니다.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* 접속 중인 학생 현황 및 컨트롤 */}
+                            <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 flex flex-col gap-4">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 flex-wrap">
+                                        <span className="shrink-0">현재 접속 중인 학생 🙋‍♂️</span>
+                                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold whitespace-nowrap shrink-0">
+                                            총 {squareParticipants.length}명
+                                        </span>
+                                    </h3>
+                                    <div className="flex gap-2 w-full sm:w-auto">
+                                        <button
+                                            onClick={handleDownloadChat}
+                                            className="flex-1 sm:flex-none px-3 py-1.5 bg-blue-100 text-blue-700 font-bold rounded-lg hover:bg-blue-200 transition-colors shadow-sm text-sm flex justify-center items-center gap-1"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                            대화목록 다운로드
+                                        </button>
+                                        <button
+                                            onClick={handleKickAll}
+                                            className="flex-1 sm:flex-none px-3 py-1.5 bg-red-100 text-red-700 font-bold rounded-lg hover:bg-red-200 transition-colors shadow-sm text-sm"
+                                        >
+                                            전체 내보내기
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {squareParticipants.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500 bg-white rounded-lg border border-dashed border-gray-200 flex-1 flex items-center justify-center">
+                                        현재 광장에 접속한 학생이 없습니다.
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        {squareParticipants.map(user => (
+                                            <div key={user.studentCode} className="bg-white p-3 rounded-lg border border-gray-100 flex flex-col items-center justify-center gap-2 shadow-sm">
+                                                <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center overflow-hidden border border-gray-100">
+                                                    <AvatarDisplay equippedItems={user.avatarConfig || {}} size={40} />
+                                                </div>
+                                                <div className="text-center">
+                                                    <div className="font-bold text-gray-800 text-sm">{user.name}</div>
+                                                    <div className="text-xs text-gray-400">{user.studentCode}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 광장 배경 설정 */}
+                            <div className="bg-blue-50/50 p-5 rounded-lg border border-blue-100">
+                                <h3 className="text-lg font-bold text-gray-800 mb-2">광장 배경 설정 🖼️</h3>
+                                <p className="text-sm text-gray-600 mb-4 bg-white p-2 rounded border border-blue-50">
+                                    원하는 배경을 클릭하면 학생들이 접속해 있는 광장의 배경이 <strong>실시간으로 변경</strong>됩니다.<br />
+                                    <span className="text-xs text-gray-400 mt-1 block">(* 0~5번 배경 이미지가 준비되어 있습니다)</span>
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    {['bg0.png', 'bg1.png', 'bg2.png', 'bg3.png', 'bg4.png', 'bg5.png'].map((bgPath, idx) => (
+                                        <button
+                                            key={bgPath}
+                                            onClick={() => {
+                                                if (classCode) firebaseService.updateSquareConfig(classCode, { background: bgPath });
+                                            }}
+                                            className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-all ${squareConfig.background === bgPath
+                                                ? 'border-blue-500 shadow-md ring-2 ring-blue-200 ring-offset-1'
+                                                : 'border-transparent hover:border-blue-300 opacity-70 hover:opacity-100'
+                                                }`}
+                                        >
+                                            {/* Dummy thumbnail to represent backgrounds before they physically exist */}
+                                            {squareConfig.background === bgPath && (
+                                                <div className="absolute top-2 right-2 z-10 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-sm">
+                                                    현재 적용됨
+                                                </div>
+                                            )}
+                                            <div className="absolute inset-0 bg-gray-200 flex items-center justify-center text-gray-400 font-bold text-lg">
+                                                배경 {idx}
+                                            </div>
+                                            {/* Actual Image if it exists */}
+                                            <div
+                                                className="absolute inset-0 bg-cover bg-center"
+                                                style={{ backgroundImage: `url('/images/square/${bgPath}')` }}
+                                            />
+                                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1 text-white text-xs font-medium text-center backdrop-blur-sm">
+                                                {bgPath}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
             </div>
 
             {/* Floating Action Buttons */}
