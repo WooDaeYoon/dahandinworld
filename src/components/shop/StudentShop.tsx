@@ -42,6 +42,10 @@ export default function StudentShop() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
 
+    // Hover State (for Shop Only)
+    const [hoveredItem, setHoveredItem] = useState<ShopItem | null>(null);
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
     useEffect(() => {
         // Load user info from localStorage
         const storedApiKey = localStorage.getItem('apiKey');
@@ -248,7 +252,13 @@ export default function StudentShop() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+        <div className="min-h-screen bg-gray-100 p-4 md:p-8"
+             onMouseMove={(e) => {
+                 if (hoveredItem) {
+                     setMousePos({ x: e.clientX, y: e.clientY });
+                 }
+             }}
+        >
             <ConfirmModal
                 isOpen={isModalOpen}
                 title="아이템 구매"
@@ -256,6 +266,30 @@ export default function StudentShop() {
                 onConfirm={confirmPurchase}
                 onCancel={() => setIsModalOpen(false)}
             />
+
+            {/* Floating Tooltip for Shop Item Hover */}
+            {hoveredItem && activeTab === 'shop' && (
+                <div 
+                    className="fixed pointer-events-none z-50 animate-fade-in-up"
+                    style={{ 
+                        left: `${mousePos.x + 15}px`, 
+                        top: `${mousePos.y + 15}px`,
+                        transform: 'translate(0, 0)' // Always attach relative to cursor directly
+                    }}
+                >
+                    <div className="bg-white rounded-2xl shadow-[0_10px_40px_-5px_rgba(0,0,0,0.3)] border-2 border-indigo-100 p-6 flex flex-col items-center relative">
+                        {/* Speech bubble tail */}
+                        <div className="absolute -left-2 top-4 w-4 h-4 bg-white border-l-2 border-t-2 border-indigo-100 transform -rotate-45"></div>
+                        <h4 className="text-sm font-bold text-gray-700 mb-4 whitespace-nowrap">장착 모습</h4>
+                        <AvatarDisplay 
+                            equippedItems={{
+                                [hoveredItem.category || '']: hoveredItem // 장착된 템은 비우고 호버중인 단일템만
+                            }} 
+                            size={120} 
+                        />
+                    </div>
+                </div>
+            )}
 
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-8">
 
@@ -417,7 +451,17 @@ export default function StudentShop() {
                                         const hasRequiredBadge = !requiredBadge || Object.values(badges).some(b => b.title === requiredBadge && b.hasBadge);
 
                                         return (
-                                            <div key={item.id} className={`group border rounded-xl p-4 transition-all duration-300 bg-white border-gray-100 ${isPurchased || isLevelInsufficient ? 'opacity-60' : 'hover:shadow-xl hover:-translate-y-1'}`}>
+                                            <div 
+                                                key={item.id} 
+                                                className={`group border rounded-xl p-4 transition-all duration-300 bg-white border-gray-100 ${isPurchased || isLevelInsufficient ? 'opacity-60' : 'hover:shadow-xl hover:-translate-y-1'}`}
+                                                onMouseEnter={() => {
+                                                    // 장착 불가능한 아이템(others)이나 이미 구매한 템 등은 호버 이벤트 제외 (원할 경우 추가 수정)
+                                                    if (!isPurchased && item.category !== 'others') {
+                                                        setHoveredItem(item);
+                                                    }
+                                                }}
+                                                onMouseLeave={() => setHoveredItem(null)}
+                                            >
                                                 <div className="aspect-square bg-gray-50 rounded-lg mb-4 overflow-hidden relative">
                                                     {item.imageUrl ? (
                                                         <img src={getProxyImageUrl(item.imageUrl)} alt={item.name} className={`w-full h-full object-cover transition-transform duration-500 ${isPurchased || isLevelInsufficient ? '' : 'group-hover:scale-110'}`} />

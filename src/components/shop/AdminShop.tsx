@@ -33,6 +33,14 @@ export default function AdminShop() {
     const [loadingCoupons, setLoadingCoupons] = useState(false);
     const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
 
+    // Coupon Issuance State
+    const [isIssuingCoupon, setIsIssuingCoupon] = useState<boolean>(false);
+    const [issueSelectedCoupon, setIssueSelectedCoupon] = useState<string | null>(null);
+    const [issueSelectedStudents, setIssueSelectedStudents] = useState<string[]>([]);
+
+    // Coupon Bulk Use State
+    const [useSelectedStudents, setUseSelectedStudents] = useState<string[]>([]);
+
     // Square Management State
     const [squareParticipants, setSquareParticipants] = useState<SquareParticipant[]>([]);
     const [squareConfig, setSquareConfig] = useState<{ background?: string }>({ background: 'bg.png' });
@@ -78,6 +86,57 @@ export default function AdminShop() {
             fetchCoupons(classCode);
         } catch (error) {
             alert("처리 중 오류가 발생했습니다.");
+        }
+    };
+
+    const handleBulkUseCoupons = async () => {
+        if (!classCode || !selectedCouponId || useSelectedStudents.length === 0) return;
+        if (!confirm(`선택한 ${useSelectedStudents.length}명 학생의 쿠폰 1개씩을 사용 완료 처리하시겠습니까?`)) return;
+
+        setLoadingCoupons(true);
+        try {
+            const promises = useSelectedStudents.map(studentId => 
+                firebaseService.useConsumableItem(classCode, studentId, selectedCouponId)
+            );
+            await Promise.all(promises);
+            alert("일괄 사용 완료 처리되었습니다.");
+            setUseSelectedStudents([]);
+            fetchCoupons(classCode);
+        } catch (error) {
+            console.error(error);
+            alert("일괄 처리 중 오류가 발생했습니다.");
+        } finally {
+            setLoadingCoupons(false);
+        }
+    };
+
+    const handleIssueCoupons = async () => {
+        if (!classCode || !issueSelectedCoupon || issueSelectedStudents.length === 0) {
+            alert("지급할 쿠폰과 대상을 모두 선택해주세요.");
+            return;
+        }
+
+        const couponItem = items.find(i => i.id === issueSelectedCoupon);
+        if (!couponItem) return;
+
+        if (!confirm(`선택한 ${issueSelectedStudents.length}명 학생에게 '${couponItem.name}'을(를) 지급하시겠습니까?`)) return;
+
+        setLoadingCoupons(true);
+        try {
+            const promises = issueSelectedStudents.map(studentId => 
+                firebaseService.purchaseItem(classCode, studentId, couponItem)
+            );
+            await Promise.all(promises);
+            alert("쿠폰 일괄 지급이 완료되었습니다.");
+            setIsIssuingCoupon(false);
+            setIssueSelectedCoupon(null);
+            setIssueSelectedStudents([]);
+            fetchCoupons(classCode);
+        } catch (error) {
+            console.error(error);
+            alert("지급 중 오류가 발생했습니다.");
+        } finally {
+            setLoadingCoupons(false);
         }
     };
 
@@ -315,7 +374,13 @@ export default function AdminShop() {
                             👨‍🎓 우리 반 아바타 보기
                         </button>
                         <button
-                            onClick={() => { setActiveTab('coupons'); setSelectedCouponId(null); classCode && fetchCoupons(classCode); }}
+                            onClick={() => { 
+                                setActiveTab('coupons'); 
+                                setSelectedCouponId(null); 
+                                setIsIssuingCoupon(false);
+                                setUseSelectedStudents([]);
+                                classCode && fetchCoupons(classCode); 
+                            }}
                             className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'coupons' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             🎟️ 쿠폰 관리
@@ -706,13 +771,112 @@ export default function AdminShop() {
                                     {selectedCouponId ? `${items.find(i => i.id === selectedCouponId)?.name || '쿠폰'} 보유 학생 전체보기` : '쿠폰(소모성 아이템) 목록'}
                                 </h2>
                             </div>
-                            <button
-                                onClick={() => classCode && fetchCoupons(classCode)}
-                                className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-md text-sm font-bold hover:bg-emerald-100 transition-colors"
-                            >
-                                새로고침
-                            </button>
+                            <div className="flex gap-2">
+                                {!selectedCouponId && (
+                                    <button
+                                        onClick={() => setIsIssuingCoupon(!isIssuingCoupon)}
+                                        className={`px-3 py-1 rounded-md text-sm font-bold transition-colors ${isIssuingCoupon ? 'bg-gray-100 text-gray-600' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+                                    >
+                                        {isIssuingCoupon ? '취소' : '🎁 쿠폰 일괄 지급'}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => classCode && fetchCoupons(classCode)}
+                                    className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-md text-sm font-bold hover:bg-emerald-100 transition-colors"
+                                >
+                                    새로고침
+                                </button>
+                            </div>
                         </div>
+
+                        {/* 쿠폰 발급 UI */}
+                        {isIssuingCoupon && !selectedCouponId && (
+                            <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 mb-6">
+                                <h3 className="text-lg font-bold text-indigo-800 mb-4">🎁 쿠폰 일괄 지급하기</h3>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* 대상 쿠폰 선택 */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">어떤 쿠폰을 지급할까요?</label>
+                                        <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                                            {items.filter(item => item.isConsumable).map(coupon => (
+                                                <button
+                                                    key={coupon.id}
+                                                    onClick={() => setIssueSelectedCoupon(coupon.id!)}
+                                                    className={`p-3 text-left border rounded-lg transition-all text-sm font-medium ${
+                                                        issueSelectedCoupon === coupon.id 
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
+                                                        : 'bg-white text-gray-700 hover:border-indigo-300'
+                                                    }`}
+                                                >
+                                                    {coupon.name}
+                                                </button>
+                                            ))}
+                                            {items.filter(item => item.isConsumable).length === 0 && (
+                                                <p className="text-sm text-gray-500 col-span-2">등록된 쿠폰이 없습니다.</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* 지급 대상 학생 선택 */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="block text-sm font-bold text-gray-700">누구에게 지급할까요?</label>
+                                            <button 
+                                                onClick={() => {
+                                                    if (issueSelectedStudents.length === students.length) {
+                                                        setIssueSelectedStudents([]);
+                                                    } else {
+                                                        setIssueSelectedStudents(students.map(s => s.id));
+                                                    }
+                                                }}
+                                                className="text-xs text-indigo-600 font-bold hover:underline"
+                                            >
+                                                {issueSelectedStudents.length === students.length ? '전체 해제' : '전체 선택'}
+                                            </button>
+                                        </div>
+                                        <div className="bg-white border rounded-lg p-3 max-h-[200px] overflow-y-auto grid grid-cols-2 gap-2 custom-scrollbar">
+                                            {students.map(student => (
+                                                <label key={student.id} className="flex items-center gap-2 cursor-pointer p-1 hover:bg-gray-50 rounded">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={issueSelectedStudents.includes(student.id)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setIssueSelectedStudents(prev => [...prev, student.id]);
+                                                            } else {
+                                                                setIssueSelectedStudents(prev => prev.filter(id => id !== student.id));
+                                                            }
+                                                        }}
+                                                        className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                                    />
+                                                    <span className="text-sm">
+                                                        {student.name} <span className="text-xs text-gray-400">({student.studentCode})</span>
+                                                    </span>
+                                                </label>
+                                            ))}
+                                            {students.length === 0 && (
+                                                <p className="text-sm text-gray-500 col-span-2 text-center py-2">학생 데이터가 없습니다.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 flex justify-end">
+                                    <button
+                                        onClick={handleIssueCoupons}
+                                        disabled={loadingCoupons || !issueSelectedCoupon || issueSelectedStudents.length === 0}
+                                        className={`px-6 py-2 rounded-lg font-bold text-white shadow-md transition-colors ${
+                                            loadingCoupons || !issueSelectedCoupon || issueSelectedStudents.length === 0
+                                            ? 'bg-gray-300 cursor-not-allowed'
+                                            : 'bg-indigo-600 hover:bg-indigo-700'
+                                        }`}
+                                    >
+                                        선택한 {issueSelectedStudents.length}명에게 일괄 지급하기
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {loadingCoupons ? (
                             <div className="text-center py-12 text-gray-500">불러오는 중...</div>
@@ -765,32 +929,77 @@ export default function AdminShop() {
                                         );
                                     }
 
-                                    return studentsWithCoupon.map(({ student, couponItem }) => (
-                                        <div key={student.id} className="border border-gray-200 rounded-lg p-5 bg-gray-50 flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-white rounded-full border border-gray-200 flex items-center justify-center overflow-hidden">
-                                                    <AvatarDisplay equippedItems={student.equippedItems || {}} size={40} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-gray-800 text-lg">{student.name || '이름 없음'}</h3>
-                                                    {student.studentCode && <p className="text-xs text-gray-500">학번: {student.studentCode}</p>}
-                                                </div>
+                                    return (
+                                        <>
+                                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                <label className="flex items-center gap-2 cursor-pointer pl-2">
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={useSelectedStudents.length === studentsWithCoupon.length && studentsWithCoupon.length > 0}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setUseSelectedStudents(studentsWithCoupon.map(s => s.student.id));
+                                                            } else {
+                                                                setUseSelectedStudents([]);
+                                                            }
+                                                        }}
+                                                        className="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                                                    />
+                                                    <span className="font-bold text-gray-700">전체 선택 ({useSelectedStudents.length}/{studentsWithCoupon.length})</span>
+                                                </label>
+                                                
+                                                {useSelectedStudents.length > 0 && (
+                                                    <button
+                                                        onClick={handleBulkUseCoupons}
+                                                        className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm text-sm"
+                                                    >
+                                                        선택 학생 {useSelectedStudents.length}명 일괄 사용 완료 처리
+                                                    </button>
+                                                )}
                                             </div>
 
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-sm text-gray-500 font-medium">보유 수량</span>
-                                                    <span className="text-lg font-bold text-emerald-600">{couponItem!.quantity || 1}개</span>
+                                            {studentsWithCoupon.map(({ student, couponItem }) => (
+                                                <div key={student.id} className="border border-gray-200 rounded-lg p-4 bg-white flex items-center justify-between shadow-sm hover:border-emerald-300 transition-colors">
+                                                    <div className="flex items-center gap-4">
+                                                        <label className="cursor-pointer p-2 flex shrink-0">
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={useSelectedStudents.includes(student.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) {
+                                                                        setUseSelectedStudents(prev => [...prev, student.id]);
+                                                                    } else {
+                                                                        setUseSelectedStudents(prev => prev.filter(id => id !== student.id));
+                                                                    }
+                                                                }}
+                                                                className="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                                                            />
+                                                        </label>
+                                                        <div className="w-12 h-12 bg-gray-50 rounded-full border border-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                                                            <AvatarDisplay equippedItems={student.equippedItems || {}} size={40} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="font-bold text-gray-800 text-lg">{student.name || '이름 없음'}</h3>
+                                                            {student.studentCode && <p className="text-xs text-gray-500">학번: {student.studentCode}</p>}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-6 pr-2">
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="text-sm text-gray-500 font-medium">보유 수량</span>
+                                                            <span className="text-xl font-bold text-emerald-600">{couponItem!.quantity || 1}<span className="text-sm text-gray-500 ml-1">개</span></span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => couponItem!.id && handleUseCoupon(student.id, couponItem!.id)}
+                                                            className="px-3 py-2 bg-gray-100 text-gray-700 font-bold rounded flex items-center gap-1 hover:bg-gray-200 transition-colors text-sm shrink-0"
+                                                        >
+                                                            <span className="text-emerald-600">&minus;1</span> 사용
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => couponItem!.id && handleUseCoupon(student.id, couponItem!.id)}
-                                                    className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg hover:bg-emerald-200 transition-colors shadow-sm"
-                                                >
-                                                    1개 사용
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ));
+                                            ))}
+                                        </>
+                                    );
                                 })()}
                             </div>
                         )}

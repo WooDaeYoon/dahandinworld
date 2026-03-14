@@ -14,6 +14,7 @@ export default function LoginPage() {
     const [teacherInfo, setTeacherInfo] = useState<any>(null);
     const [studentCode, setStudentCode] = useState('');
     const [studentTeacherId, setStudentTeacherId] = useState('');
+    const [isStudentAgreed, setIsStudentAgreed] = useState(false);
 
     // --- TEACHER STATE ---
     const [apiKey, setApiKey] = useState('');
@@ -43,6 +44,7 @@ export default function LoginPage() {
         setTeacherInfo(null);
         setStudentCode('');
         setStudentTeacherId('');
+        setIsStudentAgreed(false);
 
         setApiKey('');
         setTeacherId('');
@@ -360,7 +362,8 @@ export default function LoginPage() {
                                     placeholder="본인의 API Key를 입력하세요"
                                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 outline-none text-sm"
                                 />
-                                <p className="text-xs text-red-500 mt-1">※ 학생들의 무단 접속 방지를 위해 API Key 인증이 필요합니다.</p>
+                                <p className="text-xs text-red-500 mt-2 font-bold">※ 학생들의 무단 접속 방지를 위해 API Key 인증이 필요합니다.</p>
+                                <p className="text-xs text-gray-500 mt-1">💡 API Key는 다했니 오른쪽 상단 <span className="font-bold text-gray-700">[내정보] - [다했니 API 센터]</span>에서 발급이 가능합니다.</p>
                             </div>
 
                             <button
@@ -393,6 +396,7 @@ export default function LoginPage() {
                             {/* Step 1: API Key */}
                             <div className={`transition-opacity duration-300 ${isVerified ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                                 <label className="block text-sm font-bold text-gray-700 mb-2">다했니 API Key</label>
+                                <p className="text-xs text-gray-500 mb-3">💡 API Key는 다했니 오른쪽 상단 <span className="font-bold text-gray-700">[내정보] - [다했니 API 센터]</span>에서 발급이 가능합니다.</p>
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
@@ -516,18 +520,66 @@ export default function LoginPage() {
                                         <div className="text-2xl font-black text-indigo-800">{teacherInfo.className}</div>
                                     </div>
 
-                                    <h3 className="text-xl font-bold text-gray-800 mb-6">학생 코드를 입력하세요</h3>
-                                    <div className="mb-4">
-                                        {/* Student Code (Invite Code) - 9 chars */}
-                                        <SegmentedInput
-                                            length={9}
-                                            onComplete={handleStudentLogin}
-                                            disabled={loading}
-                                            type="text"
-                                            autoFocus={true}
-                                        />
+                                    <div className="mb-8 w-full">
+                                        <p className="text-gray-700 font-bold mb-3 text-center">약관동의 후 입장 가능합니다.</p>
+                                        <div 
+                                            onClick={() => {
+                                                if (isStudentAgreed) {
+                                                    // 이미 동의된 상태에서 클릭 시 취소
+                                                    setIsStudentAgreed(false);
+                                                } else {
+                                                    // 미동의 상태에서 클릭 시 팝업 띄우기
+                                                    const confirmed = window.confirm("선생님 다했니 계정의 학생 정보가 본 서비스로 불러와질 수 있습니다. 내용을 확인하셨으며 연동에 동의하시겠습니까?");
+                                                    if (confirmed) {
+                                                        setIsStudentAgreed(true);
+                                                    }
+                                                }
+                                            }}
+                                            className={`w-full bg-white border-2 rounded-xl py-3 px-4 flex items-center justify-between cursor-pointer transition-all ${isStudentAgreed ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.15)]' : 'border-gray-300 hover:border-green-400'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isStudentAgreed ? 'border-green-500 bg-green-500' : 'border-gray-300'}`}>
+                                                    {isStudentAgreed && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>}
+                                                </div>
+                                                <span className="font-bold text-gray-800 text-sm sm:text-base">
+                                                    개인정보 처리방침 및 동의서 <span className="text-red-500 font-normal ml-1">(필수)</span>
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-3 text-xs sm:text-sm">
+                                                <a href="/docs/개인정보처리방침.pdf" target="_blank" onClick={(e) => e.stopPropagation()} className="text-green-600 underline font-bold hover:text-green-700">약관확인</a>
+                                                <a href="/docs/학부모동의서.hwp" onClick={(e) => e.stopPropagation()} className="text-green-600 underline font-bold hover:text-green-700">동의서확인</a>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-gray-400">내 &apos;다했니&apos; 학생 코드 9자리를 입력해주세요.</p>
+
+                                    {isStudentAgreed ? (
+                                        <div className="animate-fade-in-up">
+                                            <h3 className="text-xl font-bold text-gray-800 mb-6">학생 코드를 입력하세요</h3>
+                                            <div className="mb-4">
+                                                {/* Student Code (Invite Code) - 9 chars */}
+                                                <SegmentedInput
+                                                    length={9}
+                                                    onComplete={handleStudentLogin}
+                                                    disabled={loading}
+                                                    type="text"
+                                                    autoFocus={true}
+                                                />
+                                            </div>
+                                            <p className="text-xs text-gray-400">내 &apos;다했니&apos; 학생 코드 9자리를 입력해주세요.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="py-8 opacity-50 flex flex-col items-center justify-center transition-opacity duration-300">
+                                            {/* 코드를 입력할 수 있는 형태만 남겨두되 흐리게 처리 (UX 통일성) */}
+                                            <h3 className="text-xl font-bold text-gray-400 mb-6">학생 코드를 입력하세요</h3>
+                                            <div className="flex gap-2 justify-center mb-4 pointer-events-none">
+                                                {Array.from({length: 9}).map((_, i) => (
+                                                    <div key={i} className="w-10 h-10 md:w-12 md:h-12 border-2 border-gray-200 rounded-lg bg-gray-50 flex items-center justify-center">
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-gray-400 font-bold">약관에 동의해야 입력할 수 있습니다.</p>
+                                        </div>
+                                    )}
 
                                     <button
                                         onClick={() => { setTeacherInfo(null); setStudentTeacherId(''); }}
