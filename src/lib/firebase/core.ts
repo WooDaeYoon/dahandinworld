@@ -678,15 +678,16 @@ export const firebaseService = {
             const response = await fetch('/api/upload', { method: 'POST', body: formData });
 
             if (!response.ok) {
-                let errorDetails = '';
+                const errorText = await response.text();
+                let errorDetails = errorText;
                 try {
-                    const errorData = await response.json();
+                    const errorData = JSON.parse(errorText);
                     errorDetails = JSON.stringify(errorData);
                 } catch (e) {
-                    errorDetails = await response.text();
+                    // JSON parsing failed, keep raw text
                 }
                 console.error("Server returned error:", response.status, errorDetails);
-                throw new Error(`Upload failed: ${errorDetails}`);
+                throw new Error(`Upload failed (Status ${response.status}): ${errorDetails}`);
             }
 
             const data = await response.json();

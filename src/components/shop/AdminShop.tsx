@@ -203,6 +203,12 @@ export default function AdminShop() {
             let imageUrl = newItem.imageUrl || '';
 
             if (imageFile) {
+                // Vercel Serverless Function Limit (4.5MB) check
+                if (imageFile.size > 4 * 1024 * 1024) {
+                    alert('이미지 파일 용량이 너무 큽니다. 4MB 이하의 이미지를 업로드해주세요.');
+                    setLoading(false);
+                    return;
+                }
                 imageUrl = await firebaseService.uploadImage(imageFile);
             }
 
