@@ -48,6 +48,17 @@ export default function SquareSystem() {
         };
     }, []);
 
+    // Heartbeat for square presence
+    useEffect(() => {
+        if (!classCode || !studentCode) return;
+        
+        const heartbeatInterval = setInterval(() => {
+            firebaseService.updateSquareHeartbeat(classCode, studentCode);
+        }, 60000); // Every 1 minute
+        
+        return () => clearInterval(heartbeatInterval);
+    }, [classCode, studentCode]);
+
     // Subscribe to Data
     useEffect(() => {
         if (!classCode) return;

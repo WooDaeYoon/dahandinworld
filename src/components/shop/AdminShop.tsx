@@ -21,6 +21,7 @@ export default function AdminShop() {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editPrice, setEditPrice] = useState<number>(0);
+    const [editLevel, setEditLevel] = useState<number>(0);
 
     const [classCode, setClassCode] = useState<string | null>(null);
     const [className, setClassName] = useState<string | null>(null);
@@ -245,14 +246,17 @@ export default function AdminShop() {
         }
     };
 
-    const handleUpdatePrice = async (id: string) => {
+    const handleUpdateItemParams = async (id: string) => {
         if (!classCode) return;
         try {
-            await firebaseService.updateItem(classCode, id, { price: editPrice });
+            await firebaseService.updateItem(classCode, id, { 
+                price: editPrice,
+                requiredLevel: editLevel
+            });
             setEditingId(null);
             fetchItems(classCode);
         } catch (error) {
-            alert("가격 수정 실패");
+            alert("정보 수정 실패");
         }
     };
 
@@ -670,25 +674,41 @@ export default function AdminShop() {
                                                 {(!isGlobalItem || classCode === 'GLOBAL') && (
                                                     <>
                                                         {editingId === item.id ? (
-                                                            <div className="flex items-center gap-2 mt-2">
-                                                                <input
-                                                                    type="number"
-                                                                    value={editPrice}
-                                                                    onChange={(e) => setEditPrice(Number(e.target.value))}
-                                                                    className="w-20 px-2 py-1 border rounded text-sm"
-                                                                />
-                                                                <button
-                                                                    onClick={() => item.id && handleUpdatePrice(item.id)}
-                                                                    className="px-2 py-1 bg-green-500 text-white rounded text-xs"
-                                                                >
-                                                                    저장
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setEditingId(null)}
-                                                                    className="px-2 py-1 bg-gray-400 text-white rounded text-xs"
-                                                                >
-                                                                    취소
-                                                                </button>
+                                                            <div className="flex flex-col gap-2 mt-2 bg-gray-50 border rounded p-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs text-gray-500 w-8">가격:</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={editPrice}
+                                                                        onChange={(e) => setEditPrice(Number(e.target.value))}
+                                                                        className="w-16 px-2 py-1 border rounded text-sm"
+                                                                        min="0"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs text-gray-500 w-8">레벨:</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={editLevel}
+                                                                        onChange={(e) => setEditLevel(Number(e.target.value))}
+                                                                        className="w-16 px-2 py-1 border rounded text-sm"
+                                                                        min="0"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex gap-2 justify-end mt-1">
+                                                                    <button
+                                                                        onClick={() => item.id && handleUpdateItemParams(item.id)}
+                                                                        className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs transition-colors"
+                                                                    >
+                                                                        저장
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setEditingId(null)}
+                                                                        className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs transition-colors"
+                                                                    >
+                                                                        취소
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         ) : (
                                                             <div className="flex justify-between items-center mt-2">
@@ -697,15 +717,17 @@ export default function AdminShop() {
                                                                     onClick={() => {
                                                                         setEditingId(item.id || null);
                                                                         setEditPrice(item.price);
+                                                                        setEditLevel(item.requiredLevel || 0);
                                                                     }}
                                                                     className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                                                                 >
-                                                                    가격 수정
+                                                                    수정
                                                                 </button>
                                                             </div>
                                                         )}
                                                     </>
                                                 )}
+
 
                                                 {/* Price Display for Global Item seen by Teacher (Read Only) */}
                                                 {isGlobalItem && (

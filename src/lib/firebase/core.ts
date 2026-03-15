@@ -492,6 +492,17 @@ export const firebaseService = {
         });
     },
 
+    // Update Heartbeat (Last Active Time)
+    updateSquareHeartbeat: async (classCode: string, studentCode: string) => {
+        if (!classCode) return;
+        try {
+            const onlineRef = doc(db, `${getResolvedPath(classCode)}/square_online/${studentCode}`);
+            await setDoc(onlineRef, { lastActive: serverTimestamp() }, { merge: true });
+        } catch (error) {
+            console.error("Failed to update square heartbeat", error);
+        }
+    },
+
     // Leave Square
     leaveSquare: async (classCode: string, studentCode: string) => {
         if (!classCode) return;
@@ -519,7 +530,23 @@ export const firebaseService = {
         const q = query(collection(db, `${getResolvedPath(classCode)}/square_online`));
         return onSnapshot(q, (snapshot) => {
             const users: SquareParticipant[] = [];
-            snapshot.forEach(doc => users.push(doc.data() as SquareParticipant));
+            const now = Date.now();
+            snapshot.forEach(doc => {
+                const data = doc.data() as SquareParticipant;
+                let isActive = true;
+                
+                // Filter out offline ghost users (no heartbeat for 3 minutes = 180,000ms)
+                if (data.lastActive) {
+                    const lastActiveTime = data.lastActive.toDate?.()?.getTime() || data.lastActive;
+                    if (now - lastActiveTime > 180000) {
+                        isActive = false;
+                    }
+                }
+                
+                if (isActive) {
+                    users.push(data);
+                }
+            });
             callback(users);
         });
     },
