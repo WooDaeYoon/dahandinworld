@@ -42,6 +42,13 @@ export default function AdminShop() {
     // Coupon Bulk Use State
     const [useSelectedStudents, setUseSelectedStudents] = useState<string[]>([]);
 
+    // Student Detail Modal State
+    const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
+    const [studentCookieLogs, setStudentCookieLogs] = useState<any[]>([]);
+    const [rewardAmount, setRewardAmount] = useState<number>(0);
+    const [rewardReason, setRewardReason] = useState<string>('');
+    const [isProvidingCookie, setIsProvidingCookie] = useState(false);
+
     // Square Management State
     const [squareParticipants, setSquareParticipants] = useState<SquareParticipant[]>([]);
     const [squareConfig, setSquareConfig] = useState<{ background?: string }>({ background: 'bg.png' });
@@ -283,6 +290,118 @@ export default function AdminShop() {
         window.location.href = '/login';
     };
 
+    const handleStudentClick = async (student: any) => {
+        setSelectedStudent(student);
+        if (classCode) {
+            const logs = await firebaseService.getCookieLog(classCode, student.id);
+            setStudentCookieLogs(logs);
+        }
+    };
+
+    const handleProvideCookie = async () => {
+        if (!classCode || !selectedStudent) return;
+        if (rewardAmount <= 0) {
+            alert("지급할 쿠키 수량을 입력하세요.");
+            return;
+        }
+        setIsProvidingCookie(true);
+        try {
+            await firebaseService.provideCookies(classCode, selectedStudent.id, rewardAmount, rewardReason);
+            alert("쿠키가 성공적으로 지급되었습니다.");
+            setRewardAmount(0);
+            setRewardReason('');
+            const logs = await firebaseService.getCookieLog(classCode, selectedStudent.id);
+            setStudentCookieLogs(logs);
+        } catch (error) {
+            alert("쿠키 지급 중 오류가 발생했습니다.");
+        } finally {
+            setIsProvidingCookie(false);
+        }
+    };
+
+    const handleDownloadAvatar = async () => {
+        if (!selectedStudent) return;
+        
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            // Draw background
+            ctx.fillStyle = '#eff6ff'; // bg-blue-50
+            ctx.fillRect(0, 0, 400, 400);
+
+            const eq = selectedStudent.equippedItems || {};
+            const layers = [
+                { type: 'background', url: eq.background?.imageUrl, style: eq.background?.style },
+                { type: 'body', url: '/assets/avatar/base_body.png', style: null },
+                { type: 'face', url: eq.face?.imageUrl, style: eq.face?.style },
+                { type: 'hair', url: eq.hair?.imageUrl, style: eq.hair?.style },
+                { type: 'outfit', url: eq.outfit?.imageUrl, style: eq.outfit?.style },
+                { type: 'accessory', url: eq.accessory?.imageUrl, style: eq.accessory?.style },
+            ];
+
+            const validLayers = layers.filter(l => l.url);
+            
+            for (const layer of validLayers) {
+                try {
+                    const response = await fetch(getProxyImageUrl(layer.url!));
+                    const blob = await response.blob();
+                    const objectUrl = URL.createObjectURL(blob);
+                    
+                    await new Promise<void>((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const style = layer.style;
+                            if (style && layer.type !== 'body' && layer.type !== 'background') {
+                                const w = (style.width / 100) * 400;
+                                const h = img.height * (w / img.width);
+                                const x = (style.x / 100) * 400;
+                                const y = (style.y / 100) * 400;
+                                ctx.drawImage(img, x, y, w, h);
+                            } else {
+                                ctx.drawImage(img, 0, 0, 400, 400);
+                            }
+                            URL.revokeObjectURL(objectUrl);
+                            resolve();
+                        };
+                        img.onerror = () => {
+                            URL.revokeObjectURL(objectUrl);
+                            resolve();
+                        };
+                        img.src = objectUrl;
+                    });
+                } catch (e) {
+                    console.error("Failed to load image layer", e);
+                }
+            }
+
+            const link = document.createElement('a');
+            link.download = `${selectedStudent.name}_아바타.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (err) {
+            console.error(err);
+            alert("이미지 저장에 실패했습니다.");
+        }
+    };
+
+    const handleKickStudent = async (studentId: string) => {
+        if (!classCode) return;
+        if (!confirm("정말 이 학생을 내보내시겠습니까? 삭제된 학생의 아바타 및 쿠키 데이터는 복구할 수 없습니다.")) return;
+
+        try {
+            await firebaseService.removeStudentFromClass(classCode, studentId);
+            fetchStudents(classCode);
+            alert("학생을 내보냈습니다.");
+        } catch (error) {
+            console.error(error);
+            alert("내보내기 중 오류가 발생했습니다.");
+        }
+    };
+
     const handleKickAll = async () => {
         if (!classCode) return;
         if (!confirm("광장에 접속 중인 모든 학생을 강제로 내보내시겠습니까?\n\n(참고: 내보내진 학생은 자동으로 상점 화면으로 돌아갑니다.)")) return;
@@ -353,6 +472,100 @@ export default function AdminShop() {
 
     return (
         <div className="min-h-screen bg-gray-50 p-8">
+            {/* Student Detail Modal */}
+            {selectedStudent && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedStudent(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden relative flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setSelectedStudent(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 z-10 p-1 bg-white rounded-full transition-colors border shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                        
+                        <div className="p-6 border-b text-center relative bg-gradient-to-b from-indigo-50 to-white">
+                            <button
+                                onClick={() => handleKickStudent(selectedStudent.id)}
+                                className="absolute top-4 left-4 text-xs font-bold px-3 py-1.5 bg-white border border-red-200 text-red-500 rounded-lg hover:bg-red-50 hover:text-red-700 transition-colors shadow-sm"
+                                title="학생을 반에서 내보냅니다."
+                            >
+                                내보내기
+                            </button>
+                            
+                            <div className="mx-auto w-40 h-40 mt-4 mb-4 bg-white rounded-[2rem] shadow-inner border border-gray-100 flex items-center justify-center relative group">
+                                <AvatarDisplay equippedItems={selectedStudent.equippedItems || {}} size={150} />
+                                <button 
+                                    onClick={handleDownloadAvatar}
+                                    className="absolute -bottom-2 -right-2 bg-indigo-600 text-white p-2.5 rounded-full shadow-lg hover:bg-indigo-700 hover:scale-110 transition-all cursor-pointer z-10 border-2 border-white"
+                                    title="PNG 이미지로 다운로드"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                </button>
+                            </div>
+                            <h3 className="text-2xl font-black text-gray-800">{selectedStudent.name}</h3>
+                            <p className="text-sm font-bold text-indigo-400 tracking-wider font-mono mt-1">{selectedStudent.studentCode}</p>
+                        </div>
+                        
+                        <div className="p-6 bg-gray-50 flex-1 overflow-y-auto custom-scrollbar">
+                            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-6">
+                                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <span>🍪</span> 선생님 쿠키 선물하기
+                                </h4>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="지급 사유 (예: 칭찬)"
+                                        value={rewardReason}
+                                        onChange={(e) => setRewardReason(e.target.value)}
+                                        className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                    />
+                                    <input 
+                                        type="number" 
+                                        placeholder="수량"
+                                        value={rewardAmount || ''}
+                                        onChange={(e) => setRewardAmount(Number(e.target.value))}
+                                        className="w-20 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-center"
+                                        min="1"
+                                    />
+                                    <button 
+                                        onClick={handleProvideCookie}
+                                        disabled={isProvidingCookie || rewardAmount <= 0}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors shadow-sm disabled:bg-gray-300 disabled:shadow-none whitespace-nowrap"
+                                    >
+                                        지급
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <span>📜</span> 쿠키 내역 <span className="text-xs text-gray-400 font-normal">(최근 20건)</span>
+                                </h4>
+                                <div className="space-y-2">
+                                    {studentCookieLogs.length === 0 ? (
+                                        <p className="text-center text-sm text-gray-400 py-6 bg-white rounded-xl border border-dashed border-gray-200">사용 내역이 없습니다.</p>
+                                    ) : (
+                                        studentCookieLogs.map(log => (
+                                            <div key={log.id} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                                                        {log.type === 'purchase' ? '🛒' : log.type === 'donation' ? '❤️' : '🎁'}
+                                                        {log.itemName || '알 수 없음'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 mt-1">
+                                                        {new Date(log.createdAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                    </p>
+                                                </div>
+                                                <div className={`font-black ${log.type === 'reward' ? 'text-indigo-600' : 'text-orange-500'}`}>
+                                                    {log.type === 'reward' ? '+' : '-'}{log.amount}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
             <div className="max-w-6xl mx-auto">
                 <header className="mb-8 flex justify-between items-center">
                     <div>
@@ -769,11 +982,13 @@ export default function AdminShop() {
                         ) : (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                                 {students.map((student) => (
-                                    <div key={student.id} className="flex flex-col items-center bg-gray-50 border border-gray-100 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                                        <div className="mb-3 transform hover:scale-105 transition-transform duration-300">
+                                    <div key={student.id} 
+                                         onClick={() => handleStudentClick(student)}
+                                         className="relative flex flex-col items-center bg-gray-50 border border-gray-100 p-4 rounded-xl shadow-sm hover:shadow-lg transition-all cursor-pointer group">
+                                        <div className="mb-3 transform group-hover:scale-110 transition-transform duration-300">
                                             <AvatarDisplay equippedItems={student.equippedItems || {}} size={120} />
                                         </div>
-                                        <span className="font-bold text-gray-700 text-lg">{student.name || '이름 없음'}</span>
+                                        <span className="font-bold text-gray-700 text-lg group-hover:text-indigo-600 transition-colors">{student.name || '이름 없음'}</span>
                                         {student.studentCode && (
                                             <span className="text-xs text-gray-400 mt-1">학번: {student.studentCode}</span>
                                         )}
@@ -827,7 +1042,7 @@ export default function AdminShop() {
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-2">어떤 쿠폰을 지급할까요?</label>
                                         <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                                            {items.filter(item => item.isConsumable).map(coupon => (
+                                            {items.filter(item => item.isConsumable && !item.isHidden).map(coupon => (
                                                 <button
                                                     key={coupon.id}
                                                     onClick={() => setIssueSelectedCoupon(coupon.id!)}
@@ -840,7 +1055,7 @@ export default function AdminShop() {
                                                     {coupon.name}
                                                 </button>
                                             ))}
-                                            {items.filter(item => item.isConsumable).length === 0 && (
+                                            {items.filter(item => item.isConsumable && !item.isHidden).length === 0 && (
                                                 <p className="text-sm text-gray-500 col-span-2">등록된 쿠폰이 없습니다.</p>
                                             )}
                                         </div>
@@ -911,12 +1126,12 @@ export default function AdminShop() {
                         ) : !selectedCouponId ? (
                             // 쿠폰 종류 목록 표시
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                {items.filter(item => item.isConsumable).length === 0 ? (
+                                {items.filter(item => item.isConsumable && !item.isHidden).length === 0 ? (
                                     <div className="col-span-full text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                                         <p>등록된 쿠폰이 없어요.</p>
                                     </div>
                                 ) : (
-                                    items.filter(item => item.isConsumable).map(coupon => (
+                                    items.filter(item => item.isConsumable && !item.isHidden).map(coupon => (
                                         <button
                                             key={coupon.id}
                                             onClick={() => setSelectedCouponId(coupon.id!)}

@@ -224,6 +224,23 @@ export const firebaseService = {
         }
     },
 
+    // Remove Student from Class
+    removeStudentFromClass: async (classCode: string, studentCode: string) => {
+        if (!classCode || !studentCode) return;
+        try {
+            // Delete main student doc
+            const studentRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}`);
+            await deleteDoc(studentRef);
+
+            // Delete from square if they are there
+            const squareRef = doc(db, `${getResolvedPath(classCode)}/square_online/${studentCode}`);
+            await deleteDoc(squareRef);
+        } catch (error) {
+            console.error("Error removing student from class:", error);
+            throw error;
+        }
+    },
+
     // --- INVENTORY & STUDENT DATA (Scoped to Class) ---
 
     // Purchase Item
@@ -369,14 +386,50 @@ export const firebaseService = {
             let totalUsed = 0;
             snapshot.forEach(doc => {
                 const data = doc.data();
-                if (data.amount && (data.type === 'purchase' || data.type === 'donation')) {
-                    totalUsed += Number(data.amount);
+                if (data.amount) {
+                    if (data.type === 'purchase' || data.type === 'donation') {
+                        totalUsed += Number(data.amount);
+                    } else if (data.type === 'reward') {
+                        totalUsed -= Number(data.amount);
+                    }
                 }
             });
             return totalUsed;
         } catch (e) {
             console.error("Error calculating used cookies:", e);
             return 0;
+        }
+    },
+
+    provideCookies: async (classCode: string, studentCode: string, amount: number, reason: string) => {
+        try {
+            const studentRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}`);
+            // Record as negative usedCookies to grant balance
+            await setDoc(studentRef, { usedCookies: increment(-amount) }, { merge: true });
+
+            const logRef = collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/cookielog`);
+            await addDoc(logRef, {
+                amount,
+                type: 'reward',
+                itemId: null,
+                itemName: reason || '선생님 보너스',
+                createdAt: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('Provide cookies error:', error);
+            throw error;
+        }
+    },
+
+    getCookieLog: async (classCode: string, studentCode: string) => {
+        try {
+            const logsRef = collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/cookielog`);
+            const q = query(logsRef, orderBy('createdAt', 'desc'), limit(20));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (error) {
+            console.error("Error getting cookie log:", error);
+            return [];
         }
     },
 

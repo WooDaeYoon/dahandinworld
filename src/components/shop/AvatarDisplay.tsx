@@ -8,8 +8,8 @@ interface AvatarDisplayProps {
 }
 
 export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDisplayProps) {
-    // Layer Order: Background -> Body -> Face -> Outfit -> Hair -> Accessory
-    // Z-Index: -10 -> 0 -> 10 -> 20 -> 30 -> 40
+    // Layer Order: Background -> Body -> Face -> Hair -> Outfit -> Accessory
+    // Z-Index: 0 -> 0 -> 10 -> 20 -> 30 -> 40
 
     // Base Body Image (Placeholder or Asset)
     // Ideally, this should be a prop or a constant asset path.
@@ -63,21 +63,6 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
                 />
             )}
 
-            {/* Outfit */}
-            {equippedItems.outfit && equippedItems.outfit.imageUrl && (
-                <img
-                    src={getProxyImageUrl(equippedItems.outfit.imageUrl)}
-                    alt="Outfit"
-                    className="absolute object-contain"
-                    style={{
-                        zIndex: 20,
-                        left: `${equippedItems.outfit.style?.x || 0}%`,
-                        top: `${equippedItems.outfit.style?.y || 0}%`,
-                        width: `${equippedItems.outfit.style?.width || 100}%`,
-                    }}
-                />
-            )}
-
             {/* Hair */}
             {equippedItems.hair && equippedItems.hair.imageUrl && (
                 <img
@@ -85,10 +70,25 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
                     alt="Hair"
                     className="absolute object-contain"
                     style={{
-                        zIndex: 30,
+                        zIndex: 20,
                         left: `${equippedItems.hair.style?.x || 0}%`,
                         top: `${equippedItems.hair.style?.y || 0}%`,
                         width: `${equippedItems.hair.style?.width || 100}%`,
+                    }}
+                />
+            )}
+
+            {/* Outfit */}
+            {equippedItems.outfit && equippedItems.outfit.imageUrl && (
+                <img
+                    src={getProxyImageUrl(equippedItems.outfit.imageUrl)}
+                    alt="Outfit"
+                    className="absolute object-contain"
+                    style={{
+                        zIndex: 30,
+                        left: `${equippedItems.outfit.style?.x || 0}%`,
+                        top: `${equippedItems.outfit.style?.y || 0}%`,
+                        width: `${equippedItems.outfit.style?.width || 100}%`,
                     }}
                 />
             )}
