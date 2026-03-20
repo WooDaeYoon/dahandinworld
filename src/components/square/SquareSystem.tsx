@@ -183,7 +183,7 @@ export default function SquareSystem() {
     };
 
     return (
-        <div className="flex flex-col h-screen bg-green-50 overflow-hidden">
+        <div className="flex flex-col h-screen bg-green-50 overflow-hidden" translate="no">
             {/* Header */}
             <header className="bg-white shadow-sm p-4 flex justify-between items-center z-10">
                 <div className="flex items-center gap-2">

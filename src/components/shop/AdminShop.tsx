@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { firebaseService, ShopItem, SquareParticipant } from '@/lib/firebase/core';
+import { dahandinClient } from '@/lib/dahandin/client';
 import AvatarDisplay from './AvatarDisplay';
 import { getProxyImageUrl } from '@/lib/utils';
 
@@ -45,6 +46,7 @@ export default function AdminShop() {
     // Student Detail Modal State
     const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
     const [studentCookieLogs, setStudentCookieLogs] = useState<any[]>([]);
+    const [studentRealCookies, setStudentRealCookies] = useState<number | null>(null);
     const [rewardAmount, setRewardAmount] = useState<number>(0);
     const [rewardReason, setRewardReason] = useState<string>('');
     const [isProvidingCookie, setIsProvidingCookie] = useState(false);
@@ -292,9 +294,24 @@ export default function AdminShop() {
 
     const handleStudentClick = async (student: any) => {
         setSelectedStudent(student);
+        setStudentRealCookies(null);
         if (classCode) {
             const logs = await firebaseService.getCookieLog(classCode, student.id);
             setStudentCookieLogs(logs);
+
+            try {
+                const storedApiKey = localStorage.getItem('apiKey');
+                if (storedApiKey && student.studentCode) {
+                    const response = await dahandinClient.getStudentTotal(student.studentCode, storedApiKey);
+                    if (response.result && response.data) {
+                        const baseCookies = response.data.totalCookie || 0;
+                        const usedCookies = await firebaseService.getUsedCookies(classCode, student.id);
+                        setStudentRealCookies(baseCookies - usedCookies);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch student real cookies", err);
+            }
         }
     };
 
@@ -500,7 +517,16 @@ export default function AdminShop() {
                                 </button>
                             </div>
                             <h3 className="text-2xl font-black text-gray-800">{selectedStudent.name}</h3>
-                            <p className="text-sm font-bold text-indigo-400 tracking-wider font-mono mt-1">{selectedStudent.studentCode}</p>
+                            <p className="text-sm font-bold text-indigo-400 tracking-wider font-mono mt-1 mb-2">{selectedStudent.studentCode}</p>
+                            
+                            {studentRealCookies !== null && (
+                                <div className="inline-block mt-1">
+                                    <span className="bg-orange-100/80 text-orange-600 px-3 py-1.5 rounded-full text-sm font-bold border border-orange-200 shadow-sm flex items-center gap-1.5">
+                                        <span className="text-base">🍪</span>
+                                        잔여 쿠키: {studentRealCookies}개
+                                    </span>
+                                </div>
+                            )}
                         </div>
                         
                         <div className="p-6 bg-gray-50 flex-1 overflow-y-auto custom-scrollbar">
