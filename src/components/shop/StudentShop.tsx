@@ -30,11 +30,11 @@ export default function StudentShop() {
     const categories = [
         { id: 'all', label: '전체' },
         { id: 'background', label: '배경' },
-        { id: 'hair', label: '헤어' },
+        { id: 'cookie', label: '쿠키맛' },
         { id: 'face', label: '얼굴' },
+        { id: 'hair', label: '헤어' },
         { id: 'outfit', label: '의상' },
         { id: 'accessory', label: '액세서리' },
-        { id: 'cookie', label: '쿠키맛' },
         { id: 'others', label: '기타' },
     ];
 

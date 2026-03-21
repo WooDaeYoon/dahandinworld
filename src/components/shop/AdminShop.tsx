@@ -58,11 +58,11 @@ export default function AdminShop() {
     const categories = [
         { id: 'all', label: '전체' },
         { id: 'background', label: '배경' },
-        { id: 'hair', label: '헤어' },
+        { id: 'cookie', label: '쿠키맛' },
         { id: 'face', label: '얼굴' },
+        { id: 'hair', label: '헤어' },
         { id: 'outfit', label: '의상' },
         { id: 'accessory', label: '액세서리' },
-        { id: 'cookie', label: '쿠키맛' },
         { id: 'others', label: '기타' },
         { id: 'consumable', label: '🎟️ 쿠폰/소모품' },
     ];
@@ -732,11 +732,11 @@ export default function AdminShop() {
                                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                                                 >
                                                     <option value="background">배경 (Background)</option>
-                                                    <option value="hair">헤어 (Hair)</option>
+                                                    <option value="cookie">쿠키맛 (Cookie Flavor)</option>
                                                     <option value="face">얼굴 (Face)</option>
+                                                    <option value="hair">헤어 (Hair)</option>
                                                     <option value="outfit">의상 (Outfit)</option>
                                                     <option value="accessory">액세서리 (Accessory)</option>
-                                                    <option value="cookie">쿠키맛 (Cookie Flavor)</option>
                                                     <option value="others">기타 (Others)</option>
                                                 </select>
                                             </div>
