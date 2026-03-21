@@ -273,7 +273,7 @@ export default function LoginPage() {
                 <div className={`p-8 text-center transition-colors duration-500 relative overflow-hidden ${view.startsWith('teacher') || view === 'admin-login' ? 'bg-gray-900/80 backdrop-blur-md' : 'bg-indigo-600/80 backdrop-blur-md'}`}>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                     <h1 className="text-4xl font-black text-white mb-2 relative z-10 tracking-tight drop-shadow-md">다했니 월드</h1>
-                    <p className={`font-medium relative z-10 ${view.startsWith('teacher') || view === 'admin-login' ? 'text-gray-300' : 'text-indigo-100'}`}>
+                    <p key={`header-text-${view}`} className={`font-medium relative z-10 ${view.startsWith('teacher') || view === 'admin-login' ? 'text-gray-300' : 'text-indigo-100'}`}>
                         {view === 'main' && "우리 반 친구들과 함께해요!"}
                         {view === 'student' && "학생 로그인"}
                         {view === 'teacher-login' && "선생님 로그인"}
@@ -285,7 +285,7 @@ export default function LoginPage() {
                 <div className="p-8">
                     {/* VIEW: MAIN */}
                     {view === 'main' && (
-                        <div className="space-y-4 animate-fade-in-up">
+                        <div key="view-main" className="space-y-4 animate-fade-in-up">
                             <button
                                 onClick={() => { setView('student'); resetState(); }}
                                 className="w-full py-8 rounded-2xl border-2 border-indigo-200/50 bg-white/60 backdrop-blur-sm hover:bg-white hover:border-indigo-400 hover:shadow-[0_0_25px_rgba(79,70,229,0.2)] transition-all duration-300 group flex flex-col items-center justify-center gap-3 transform hover:-translate-y-1"
@@ -304,7 +304,7 @@ export default function LoginPage() {
 
                     {/* VIEW: ADMIN LOGIN */}
                     {view === 'admin-login' && (
-                        <div className="space-y-6">
+                        <div key="view-admin" className="space-y-6">
                             <div className="flex justify-between items-center">
                                 <button onClick={() => setView('main')} className="text-gray-400 hover:text-gray-600 text-sm font-bold">← 뒤로가기</button>
                             </div>
@@ -340,7 +340,7 @@ export default function LoginPage() {
 
                     {/* VIEW: TEACHER LOGIN */}
                     {view === 'teacher-login' && (
-                        <div className="space-y-6">
+                        <div key="view-teacher-login" className="space-y-6">
                             <div className="flex justify-between items-center">
                                 <button onClick={() => setView('main')} className="text-gray-400 hover:text-gray-600 text-sm font-bold">← 뒤로가기</button>
                             </div>
@@ -388,7 +388,7 @@ export default function LoginPage() {
 
                     {/* VIEW: TEACHER REGISTER */}
                     {view === 'teacher-register' && (
-                        <div className="space-y-6">
+                        <div key="view-teacher-register" className="space-y-6">
                             <div className="flex justify-between items-center">
                                 <button onClick={() => setView('teacher-login')} className="text-gray-400 hover:text-gray-600 text-sm font-bold">← 로그인으로</button>
                             </div>
@@ -485,7 +485,7 @@ export default function LoginPage() {
 
                     {/* VIEW: STUDENT */}
                     {view === 'student' && (
-                        <div className="space-y-8 text-center">
+                        <div key="view-student" className="space-y-8 text-center">
                             <div className="flex justify-start">
                                 <button onClick={() => setView('main')} className="text-gray-400 hover:text-gray-600 text-sm font-bold">← 뒤로가기</button>
                             </div>

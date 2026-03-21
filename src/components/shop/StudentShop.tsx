@@ -25,7 +25,7 @@ export default function StudentShop() {
     const [equippedItems, setEquippedItems] = useState<Record<string, ShopItem>>({});
     const [badges, setBadges] = useState<Record<string, DahandinBadge>>({});
     const [activeTab, setActiveTab] = useState<'shop' | 'inventory'>('shop');
-    const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others'>('all');
+    const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'cookie' | 'others'>('all');
 
     const categories = [
         { id: 'all', label: '전체' },
@@ -34,6 +34,7 @@ export default function StudentShop() {
         { id: 'face', label: '얼굴' },
         { id: 'outfit', label: '의상' },
         { id: 'accessory', label: '액세서리' },
+        { id: 'cookie', label: '쿠키맛' },
         { id: 'others', label: '기타' },
     ];
 
@@ -228,7 +229,13 @@ export default function StudentShop() {
     // Level is based on TOTAL cookies earned (from API), not current balance.
     const level = Math.floor(totalAccumulatedCookies / 10);
 
-    const filteredItems = items.filter(item => selectedCategory === 'all' || item.category === selectedCategory);
+    const filteredItems = items
+        .filter(item => selectedCategory === 'all' || item.category === selectedCategory)
+        .sort((a, b) => {
+            const aIsGlobal = a.isGlobal ? 1 : 0;
+            const bIsGlobal = b.isGlobal ? 1 : 0;
+            return bIsGlobal - aIsGlobal;
+        });
     const filteredInventory = inventory.filter(item => selectedCategory === 'all' || item.category === selectedCategory);
 
 
@@ -442,7 +449,7 @@ export default function StudentShop() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {filteredItems.map((item) => {
                                         const isOwned = inventory.some(invItem => invItem.id === item.id);
-                                        const isOneTimePurchase = ['background', 'hair', 'face', 'outfit', 'accessory'].includes(item.category || '');
+                                        const isOneTimePurchase = ['background', 'hair', 'face', 'outfit', 'accessory', 'cookie'].includes(item.category || '');
                                         const isPurchased = isOwned && isOneTimePurchase;
                                         const requiredLevel = item.requiredLevel || 0;
                                         const isLevelInsufficient = requiredLevel > level;

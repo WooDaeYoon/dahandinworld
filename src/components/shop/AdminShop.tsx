@@ -27,7 +27,7 @@ export default function AdminShop() {
     const [classCode, setClassCode] = useState<string | null>(null);
     const [className, setClassName] = useState<string | null>(null);
 
-    const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'others' | 'consumable'>('all');
+    const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'cookie' | 'others' | 'consumable'>('all');
     const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square'>('shop');
     const [students, setStudents] = useState<any[]>([]);
     const [itemType, setItemType] = useState<'permanent' | 'consumable'>('permanent');
@@ -62,6 +62,7 @@ export default function AdminShop() {
         { id: 'face', label: '얼굴' },
         { id: 'outfit', label: '의상' },
         { id: 'accessory', label: '액세서리' },
+        { id: 'cookie', label: '쿠키맛' },
         { id: 'others', label: '기타' },
         { id: 'consumable', label: '🎟️ 쿠폰/소모품' },
     ];
@@ -480,11 +481,17 @@ export default function AdminShop() {
         }
     };
 
-    const filteredItems = items.filter(item => {
-        if (selectedCategory === 'all') return true;
-        if (selectedCategory === 'consumable') return item.isConsumable === true;
-        return item.category === selectedCategory && !item.isConsumable;
-    });
+    const filteredItems = items
+        .filter(item => {
+            if (selectedCategory === 'all') return true;
+            if (selectedCategory === 'consumable') return item.isConsumable === true;
+            return item.category === selectedCategory && !item.isConsumable;
+        })
+        .sort((a, b) => {
+            const aIsGlobal = a.isGlobal ? 1 : 0;
+            const bIsGlobal = b.isGlobal ? 1 : 0;
+            return bIsGlobal - aIsGlobal;
+        });
 
 
     return (
@@ -729,6 +736,7 @@ export default function AdminShop() {
                                                     <option value="face">얼굴 (Face)</option>
                                                     <option value="outfit">의상 (Outfit)</option>
                                                     <option value="accessory">액세서리 (Accessory)</option>
+                                                    <option value="cookie">쿠키맛 (Cookie Flavor)</option>
                                                     <option value="others">기타 (Others)</option>
                                                 </select>
                                             </div>

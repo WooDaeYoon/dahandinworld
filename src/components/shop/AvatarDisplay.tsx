@@ -8,8 +8,8 @@ interface AvatarDisplayProps {
 }
 
 export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDisplayProps) {
-    // Layer Order: Background -> Body -> Face -> Hair -> Outfit -> Accessory
-    // Z-Index: 0 -> 0 -> 10 -> 20 -> 30 -> 40
+    // Layer Order: Background -> Body -> CookieFlavor -> Face -> Hair -> Outfit -> Accessory
+    // Z-Index: 0 -> 0 -> 5 -> 10 -> 20 -> 30 -> 40
 
     // Base Body Image (Placeholder or Asset)
     // Ideally, this should be a prop or a constant asset path.
@@ -47,6 +47,21 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
                     e.currentTarget.src = 'https://via.placeholder.com/200?text=Body'; // Fallback
                 }}
             />
+
+            {/* Cookie Flavor */}
+            {equippedItems.cookie && equippedItems.cookie.imageUrl && (
+                <img
+                    src={getProxyImageUrl(equippedItems.cookie.imageUrl)}
+                    alt="Cookie Flavor"
+                    className="absolute object-contain"
+                    style={{
+                        zIndex: 5,
+                        left: `${equippedItems.cookie.style?.x || 0}%`,
+                        top: `${equippedItems.cookie.style?.y || 0}%`,
+                        width: `${equippedItems.cookie.style?.width || 100}%`,
+                    }}
+                />
+            )}
 
             {/* Face */}
             {equippedItems.face && equippedItems.face.imageUrl && (
