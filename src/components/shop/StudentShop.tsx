@@ -456,14 +456,15 @@ export default function StudentShop() {
 
                                         const requiredBadge = item.requiredBadge;
                                         const hasRequiredBadge = !requiredBadge || Object.values(badges).some(b => b.title === requiredBadge && b.hasBadge);
+                                        const isSoldOut = item.useStock && (item.stock || 0) <= 0;
 
                                         return (
                                             <div 
                                                 key={item.id} 
-                                                className={`group border rounded-xl p-4 transition-all duration-300 bg-white border-gray-100 ${isPurchased || isLevelInsufficient ? 'opacity-60' : 'hover:shadow-xl hover:-translate-y-1'}`}
+                                                className={`group border rounded-xl p-4 transition-all duration-300 bg-white border-gray-100 ${isPurchased || isLevelInsufficient || isSoldOut ? 'opacity-60' : 'hover:shadow-xl hover:-translate-y-1'}`}
                                                 onMouseEnter={() => {
                                                     // 장착 불가능한 아이템(others)이나 이미 구매한 템 등은 호버 이벤트 제외 (원할 경우 추가 수정)
-                                                    if (!isPurchased && item.category !== 'others') {
+                                                    if (!isPurchased && !isSoldOut && item.category !== 'others') {
                                                         setHoveredItem(item);
                                                     }
                                                 }}
@@ -497,9 +498,23 @@ export default function StudentShop() {
                                                             </span>
                                                         </div>
                                                     )}
+                                                    {isSoldOut && !isPurchased && (
+                                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                                            <span className="bg-white/90 text-red-600 font-bold px-3 py-1 rounded-full text-sm shadow-md">
+                                                                품절
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
 
-                                                <h3 className="font-bold text-lg text-gray-800 mb-1">{item.name}</h3>
+                                                <h3 className="font-bold text-lg text-gray-800 mb-1">
+                                                    {item.name}
+                                                    {item.useStock && !isSoldOut && (
+                                                        <span className="ml-2 inline-block text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold align-middle">
+                                                            잔여 {item.stock}개
+                                                        </span>
+                                                    )}
+                                                </h3>
 
                                                 <div className="flex justify-between items-end mt-4">
                                                     <div className="text-orange-600 font-black text-xl">
@@ -507,7 +522,7 @@ export default function StudentShop() {
                                                     </div>
                                                     <button
                                                         onClick={() => initiatePurchase(item)}
-                                                        className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-sm ${isPurchased
+                                                        className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-sm ${isPurchased || isSoldOut
                                                             ? 'bg-gray-300 text-white cursor-not-allowed'
                                                             : isLevelInsufficient || !hasRequiredBadge // Check badge
                                                                 ? 'bg-red-100 text-red-400 cursor-not-allowed'
@@ -515,15 +530,17 @@ export default function StudentShop() {
                                                                     ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                                                                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                                             }`}
-                                                        disabled={realCookies < item.price || isPurchased || isLevelInsufficient || !hasRequiredBadge}
+                                                        disabled={realCookies < item.price || isPurchased || isLevelInsufficient || !hasRequiredBadge || isSoldOut}
                                                     >
                                                         {isPurchased
                                                             ? '구매 완료'
-                                                            : isLevelInsufficient
-                                                                ? `Lv.${requiredLevel} 필요`
-                                                                : !hasRequiredBadge
-                                                                    ? `뱃지 필요`
-                                                                    : '구매하기'}
+                                                            : isSoldOut
+                                                                ? '품절'
+                                                                : isLevelInsufficient
+                                                                    ? `Lv.${requiredLevel} 필요`
+                                                                    : !hasRequiredBadge
+                                                                        ? `뱃지 필요`
+                                                                        : '구매하기'}
                                                     </button>
                                                 </div>
                                             </div>

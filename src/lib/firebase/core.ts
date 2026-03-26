@@ -22,6 +22,8 @@ export interface ShopItem {
     requiredLevel?: number; // Minimum level required to purchase
     requiredBadge?: string; // Required badge title to purchase
     isConsumable?: boolean; // True if item is a consumable/coupon
+    useStock?: boolean;
+    stock?: number;
 }
 
 
@@ -178,7 +180,28 @@ export const firebaseService = {
     // Update Item
     updateItem: async (classCode: string, itemId: string, updates: Partial<ShopItem>) => {
         try {
-            await updateDoc(doc(db, `${getResolvedPath(classCode)}/shopItems`, itemId), updates);
+            const itemRef = doc(db, `${getResolvedPath(classCode)}/shopItems`, itemId);
+            await updateDoc(itemRef, updates);
+
+            // If name is updated and it's not a GLOBAL operation (too huge), update all students' inventories in that class
+            if (updates.name && classCode !== 'GLOBAL') {
+                const studentsRef = collection(db, `${getResolvedPath(classCode)}/students`);
+                const studentsSnap = await getDocs(studentsRef);
+                
+                const updatePromises = studentsSnap.docs.map(async (studentDoc) => {
+                    const inventoryRef = doc(db, `${getResolvedPath(classCode)}/students/${studentDoc.id}/inventory`, itemId);
+                    try {
+                        const invSnap = await getDoc(inventoryRef);
+                        if (invSnap.exists()) {
+                            await updateDoc(inventoryRef, { name: updates.name });
+                        }
+                    } catch (e) {
+                        // ignore if student doesn't have it
+                    }
+                });
+                
+                await Promise.all(updatePromises);
+            }
         } catch (error) {
             console.error("Error updating item:", error);
             throw error;
@@ -247,6 +270,23 @@ export const firebaseService = {
     purchaseItem: async (classCode: string, studentCode: string, item: ShopItem) => {
         try {
             if (!item.id || !classCode) return;
+
+            if (item.useStock) {
+                const shopItemRef = doc(db, `${item.isGlobal ? 'admin/global' : getResolvedPath(classCode)}/shopItems`, item.id);
+                const shopDoc = await getDoc(shopItemRef);
+                if (shopDoc.exists()) {
+                    const currentStock = shopDoc.data().stock || 0;
+                    if (currentStock <= 0) {
+                        throw new Error("Sold out");
+                    }
+                    const newStock = currentStock - 1;
+                    await updateDoc(shopItemRef, { 
+                        stock: newStock,
+                        isHidden: newStock === 0 ? true : (shopDoc.data().isHidden || false)
+                    });
+                }
+            }
+
             // Path: {resolved}/students/{studentCode}/inventory/{itemId}
             const inventoryRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}/inventory`, item.id);
             const docSnap = await getDoc(inventoryRef);
@@ -704,7 +744,7 @@ export const firebaseService = {
             return null;
         } catch (error) {
             console.error("Get teacher error:", error);
-            return null;
+            throw new Error("서버 접속 지연: 선생님 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
         }
     },
 
@@ -718,7 +758,7 @@ export const firebaseService = {
             return null;
         } catch (error) {
             console.error("Get teacher by key error:", error);
-            return null;
+            throw new Error("서버 접속 지연: 선생님 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
         }
     },
 

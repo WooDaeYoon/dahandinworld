@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import GuideButton from "@/components/GuideButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +29,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <GuideButton />
+        <div className="fixed bottom-3 left-4 text-xs text-black/40 hover:text-black/60 transition-colors z-50 pointer-events-none font-medium">
+          제작자: 대지부부
+        </div>
       </body>
     </html>
   );

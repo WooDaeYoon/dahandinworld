@@ -10,7 +10,12 @@ export const dahandinClient = {
         'X-API-Key': apiKey,
       },
     });
-    return response.json();
+    if (!response.ok) throw new Error('서버 접속량이 많아 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+    try {
+      return await response.json();
+    } catch {
+      throw new Error('서버 혼잡으로 인해 정보를 파싱할 수 없습니다. (트래픽 초과)');
+    }
   },
 
   async getClassList(apiKey: string): Promise<DahandinResponse<DahandinClass[]>> {
@@ -20,7 +25,12 @@ export const dahandinClient = {
         'X-API-Key': apiKey,
       },
     });
-    return response.json();
+    if (!response.ok) throw new Error('서버 접속량이 많아 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+    try {
+      return await response.json();
+    } catch {
+      throw new Error('서버 혼잡으로 인해 정보를 파싱할 수 없습니다. (트래픽 초과)');
+    }
   },
 
   async getStudentList(apiKey: string): Promise<DahandinResponse<DahandinStudent[]>> {
@@ -30,6 +40,11 @@ export const dahandinClient = {
         'X-API-Key': apiKey,
       },
     });
-    return response.json();
+    if (!response.ok) throw new Error('서버 접속량이 많아 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+    try {
+      return await response.json();
+    } catch {
+      throw new Error('서버 혼잡으로 인해 정보를 파싱할 수 없습니다. (트래픽 초과)');
+    }
   }
 };

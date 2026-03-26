@@ -17,12 +17,16 @@ export default function AdminShop() {
         category: 'accessory',
         requiredLevel: 0,
         requiredBadge: '',
-        style: { x: 0, y: 0, width: 100 }
+        style: { x: 0, y: 0, width: 100 },
+        useStock: false,
+        stock: 0
     });
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editPrice, setEditPrice] = useState<number>(0);
     const [editLevel, setEditLevel] = useState<number>(0);
+    const [editStock, setEditStock] = useState<number>(0);
+    const [editName, setEditName] = useState<string>('');
 
     const [classCode, setClassCode] = useState<string | null>(null);
     const [className, setClassName] = useState<string | null>(null);
@@ -53,7 +57,7 @@ export default function AdminShop() {
 
     // Square Management State
     const [squareParticipants, setSquareParticipants] = useState<SquareParticipant[]>([]);
-    const [squareConfig, setSquareConfig] = useState<{ background?: string }>({ background: 'bg.png' });
+    const [squareConfig, setSquareConfig] = useState<{ background?: string; isRestricted?: boolean; allowedTimeSlots?: { start: string, end: string }[] }>({ background: 'bg.png' });
 
     const categories = [
         { id: 'all', label: '전체' },
@@ -230,7 +234,9 @@ export default function AdminShop() {
                 category: itemType === 'consumable' ? 'others' : newItem.category,
                 requiredLevel: newItem.requiredLevel || 0,
                 requiredBadge: newItem.requiredBadge || '',
-                isConsumable: itemType === 'consumable'
+                isConsumable: itemType === 'consumable',
+                useStock: newItem.useStock || false,
+                stock: newItem.stock || 0
             };
 
             if (itemType !== 'consumable' && newItem.style) {
@@ -248,7 +254,9 @@ export default function AdminShop() {
                 category: 'accessory',
                 requiredLevel: 0,
                 requiredBadge: '',
-                style: { x: 0, y: 0, width: 100 }
+                style: { x: 0, y: 0, width: 100 },
+                useStock: false,
+                stock: 0
             });
             setItemType('permanent');
             setImageFile(null);
@@ -262,13 +270,19 @@ export default function AdminShop() {
         }
     };
 
-    const handleUpdateItemParams = async (id: string) => {
-        if (!classCode) return;
+    const handleUpdateItemParams = async (item: ShopItem) => {
+        if (!classCode || !item.id) return;
         try {
-            await firebaseService.updateItem(classCode, id, { 
+            const updatePayload: Partial<ShopItem> = {
+                name: editName,
                 price: editPrice,
                 requiredLevel: editLevel
-            });
+            };
+            if (item.useStock) {
+                updatePayload.stock = editStock;
+                if (editStock > 0) updatePayload.isHidden = false;
+            }
+            await firebaseService.updateItem(classCode, item.id, updatePayload);
             setEditingId(null);
             fetchItems(classCode);
         } catch (error) {
@@ -711,15 +725,38 @@ export default function AdminShop() {
                                             />
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">필요 뱃지 (이름)</label>
-                                        <input
-                                            type="text"
-                                            value={newItem.requiredBadge || ''}
-                                            onChange={(e) => setNewItem({ ...newItem, requiredBadge: e.target.value })}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                            placeholder="예: 독서왕"
-                                        />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="flex flex-col gap-1">
+                                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={newItem.useStock || false}
+                                                    onChange={(e) => setNewItem({ ...newItem, useStock: e.target.checked })}
+                                                    className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                                />
+                                                재고 한정 판매
+                                            </label>
+                                            {newItem.useStock && (
+                                                <input
+                                                    type="number"
+                                                    value={newItem.stock || 0}
+                                                    onChange={(e) => setNewItem({ ...newItem, stock: Number(e.target.value) })}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                                                    placeholder="재고 수량"
+                                                    min="1"
+                                                />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">필요 뱃지 (이름)</label>
+                                            <input
+                                                type="text"
+                                                value={newItem.requiredBadge || ''}
+                                                onChange={(e) => setNewItem({ ...newItem, requiredBadge: e.target.value })}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                placeholder="예: 독서왕"
+                                            />
+                                        </div>
                                     </div>
 
                                     {itemType === 'permanent' && (
@@ -895,8 +932,13 @@ export default function AdminShop() {
                                                             </span>
                                                         )}
                                                         {item.requiredBadge && (
-                                                            <span className="inline-block text-xs px-2 py-0.5 rounded-full mt-1 bg-purple-100 text-purple-700">
+                                                            <span className="inline-block text-xs px-2 py-0.5 rounded-full mt-1 bg-purple-100 text-purple-700 mr-1">
                                                                 🏅 {item.requiredBadge}
+                                                            </span>
+                                                        )}
+                                                        {item.useStock && (
+                                                            <span className="inline-block text-xs px-2 py-0.5 rounded-full mt-1 bg-rose-100 text-rose-700 font-bold">
+                                                                📦 잔여 {item.stock}개
                                                             </span>
                                                         )}
                                                     </div>
@@ -929,7 +971,16 @@ export default function AdminShop() {
                                                         {editingId === item.id ? (
                                                             <div className="flex flex-col gap-2 mt-2 bg-gray-50 border rounded p-2">
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-xs text-gray-500 w-8">가격:</span>
+                                                                    <span className="text-xs text-gray-500 w-8 shrink-0">이름:</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editName}
+                                                                        onChange={(e) => setEditName(e.target.value)}
+                                                                        className="w-full px-2 py-1 border rounded text-sm"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs text-gray-500 w-8 shrink-0">가격:</span>
                                                                     <input
                                                                         type="number"
                                                                         value={editPrice}
@@ -939,7 +990,7 @@ export default function AdminShop() {
                                                                     />
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-xs text-gray-500 w-8">레벨:</span>
+                                                                    <span className="text-xs text-gray-500 w-8 shrink-0">레벨:</span>
                                                                     <input
                                                                         type="number"
                                                                         value={editLevel}
@@ -948,9 +999,21 @@ export default function AdminShop() {
                                                                         min="0"
                                                                     />
                                                                 </div>
+                                                                {item.useStock && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs text-gray-500 w-8 shrink-0">재고:</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={editStock}
+                                                                            onChange={(e) => setEditStock(Number(e.target.value))}
+                                                                            className="w-16 px-2 py-1 border rounded text-sm"
+                                                                            min="0"
+                                                                        />
+                                                                    </div>
+                                                                )}
                                                                 <div className="flex gap-2 justify-end mt-1">
                                                                     <button
-                                                                        onClick={() => item.id && handleUpdateItemParams(item.id)}
+                                                                        onClick={() => handleUpdateItemParams(item)}
                                                                         className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs transition-colors"
                                                                     >
                                                                         저장
@@ -969,8 +1032,10 @@ export default function AdminShop() {
                                                                 <button
                                                                     onClick={() => {
                                                                         setEditingId(item.id || null);
+                                                                        setEditName(item.name || '');
                                                                         setEditPrice(item.price);
                                                                         setEditLevel(item.requiredLevel || 0);
+                                                                        setEditStock(item.stock || 0);
                                                                     }}
                                                                     className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                                                                 >
@@ -1376,6 +1441,98 @@ export default function AdminShop() {
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* 광장 출입 제한 설정 */}
+                            <div className="bg-yellow-50/50 p-5 rounded-lg border border-yellow-100 flex flex-col gap-4">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-lg font-bold text-gray-800">광장 출입 제한 설정 ⏰</h3>
+                                    <label className="relative inline-flex items-center cursor-pointer hover:opacity-80 transition-opacity">
+                                        <input 
+                                            type="checkbox" 
+                                            className="sr-only peer" 
+                                            checked={squareConfig.isRestricted || false}
+                                            onChange={(e) => {
+                                                // 토글 변경 시 즉시 DB 저장
+                                                const newConfig = { ...squareConfig, isRestricted: e.target.checked };
+                                                setSquareConfig(newConfig);
+                                                if (classCode) firebaseService.updateSquareConfig(classCode, newConfig);
+                                            }}
+                                        />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                                        <span className="ml-3 text-sm font-bold text-gray-700">제한 기능 켜기</span>
+                                    </label>
+                                </div>
+                                
+                                {squareConfig.isRestricted && (
+                                    <div className="bg-white p-4 rounded border border-yellow-50 flex flex-col gap-3 shadow-sm">
+                                        <p className="text-sm text-gray-600 mb-2">아래 설정된 시간에만 학생들이 다했니 광장에 접속할 수 있습니다.</p>
+                                        
+                                        {(squareConfig.allowedTimeSlots || []).map((slot, index) => (
+                                            <div key={index} className="flex gap-2 items-center bg-gray-50 p-2 rounded border border-gray-100">
+                                                <input 
+                                                    type="time" 
+                                                    value={slot.start} 
+                                                    onChange={(e) => {
+                                                        const newSlots = [...(squareConfig.allowedTimeSlots || [])];
+                                                        newSlots[index].start = e.target.value;
+                                                        setSquareConfig({ ...squareConfig, allowedTimeSlots: newSlots });
+                                                    }}
+                                                    className="px-2 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-400 outline-none text-sm font-medium flex-1 text-center"
+                                                />
+                                                <span className="font-bold text-gray-400">~</span>
+                                                <input 
+                                                    type="time" 
+                                                    value={slot.end} 
+                                                    onChange={(e) => {
+                                                        const newSlots = [...(squareConfig.allowedTimeSlots || [])];
+                                                        newSlots[index].end = e.target.value;
+                                                        setSquareConfig({ ...squareConfig, allowedTimeSlots: newSlots });
+                                                    }}
+                                                    className="px-2 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-400 outline-none text-sm font-medium flex-1 text-center"
+                                                />
+                                                <button 
+                                                    onClick={() => {
+                                                        const newSlots = [...(squareConfig.allowedTimeSlots || [])];
+                                                        newSlots.splice(index, 1);
+                                                        setSquareConfig({ ...squareConfig, allowedTimeSlots: newSlots });
+                                                    }}
+                                                    className="text-gray-400 hover:text-red-500 text-xl font-bold ml-2 transition-colors px-2"
+                                                >
+                                                    &times;
+                                                </button>
+                                            </div>
+                                        ))}
+                                        
+                                        {(!squareConfig.allowedTimeSlots || squareConfig.allowedTimeSlots.length === 0) && (
+                                            <div className="text-center py-4 text-xs text-red-500 font-bold bg-red-50 rounded border border-red-100 break-keep">
+                                                개방 시간이 없습니다. 현재 모든 학생의 접속이 차단됩니다.
+                                            </div>
+                                        )}
+                                        
+                                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                                            <button 
+                                                onClick={() => {
+                                                    const newSlots = [...(squareConfig.allowedTimeSlots || []), { start: '09:00', end: '18:00' }];
+                                                    setSquareConfig({ ...squareConfig, allowedTimeSlots: newSlots });
+                                                }}
+                                                className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm font-bold transition-colors"
+                                            >
+                                                + 시간 추가
+                                            </button>
+                                            
+                                            <button 
+                                                onClick={() => {
+                                                    if (classCode) firebaseService.updateSquareConfig(classCode, squareConfig);
+                                                    alert('광장 개방 시간이 저장되었습니다.');
+                                                }}
+                                                className="px-4 py-1.5 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-sm font-bold transition-colors shadow-sm"
+                                            >
+                                                시간 저장하기
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

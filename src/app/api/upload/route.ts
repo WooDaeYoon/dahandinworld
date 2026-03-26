@@ -26,7 +26,8 @@ export async function POST(request: Request) {
         const storageRef = ref(storage, `shop/${Date.now()}_${file.name}`);
 
         // uploadBytes works with ArrayBuffer/Uint8Array
-        const snapshot = await uploadBytes(storageRef, new Uint8Array(buffer));
+        const contentType = file.type || 'application/octet-stream';
+        const snapshot = await uploadBytes(storageRef, new Uint8Array(buffer), { contentType });
         const downloadURL = await getDownloadURL(snapshot.ref);
 
         return NextResponse.json({ url: downloadURL });

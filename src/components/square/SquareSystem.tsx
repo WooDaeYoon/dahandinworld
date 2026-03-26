@@ -22,7 +22,11 @@ export default function SquareSystem() {
     const hasJoinedRef = useRef(false);
 
     // Pre-define default square config
-    const [squareConfig, setSquareConfig] = useState<{ background: string }>({ background: 'bg.png' });
+    const [squareConfig, setSquareConfig] = useState<{ 
+        background: string;
+        isRestricted?: boolean;
+        allowedTimeSlots?: { start: string, end: string }[];
+    }>({ background: 'bg.png' });
 
     useEffect(() => {
         const storedClass = localStorage.getItem('classCode');
@@ -70,7 +74,11 @@ export default function SquareSystem() {
         // Config Subscription
         const unsubConfig = firebaseService.subscribeToSquareConfig(classCode, (config) => {
             if (config) {
-                setSquareConfig({ background: config.background || 'bg.png' });
+                setSquareConfig({ 
+                    background: config.background || 'bg.png',
+                    isRestricted: config.isRestricted,
+                    allowedTimeSlots: config.allowedTimeSlots
+                });
             }
         });
 
@@ -139,6 +147,51 @@ export default function SquareSystem() {
         }, 500);
         return () => clearInterval(timer);
     }, []);
+
+    // Enforce Time Restrictions
+    useEffect(() => {
+        if (!squareConfig.isRestricted) return; // Not restricted, do nothing
+        
+        const checkTime = () => {
+            const now = new Date();
+            const currentHours = String(now.getHours()).padStart(2, '0');
+            const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+            const currentTimeStr = `${currentHours}:${currentMinutes}`;
+            
+            const slots = squareConfig.allowedTimeSlots || [];
+            
+            // If restricted but no time slots are added, it means "always closed"
+            if (slots.length === 0) {
+                return false;
+            }
+            
+            for (const slot of slots) {
+                // Time comparison works as string comparison for HH:mm format
+                if (currentTimeStr >= slot.start && currentTimeStr <= slot.end) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        const enforce = () => {
+            if (!checkTime()) {
+                alert("현재는 광장 접속 허용 시간이 아닙니다.");
+                if (classCode && studentCode) {
+                    firebaseService.leaveSquare(classCode, studentCode);
+                }
+                router.replace('/shop');
+            }
+        };
+
+        // Check immediately
+        enforce();
+        
+        // Then check every 10 seconds
+        const interval = setInterval(enforce, 10000);
+        return () => clearInterval(interval);
+        
+    }, [squareConfig.isRestricted, squareConfig.allowedTimeSlots, classCode, studentCode, router]);
 
     // Scroll to bottom of chat
     useEffect(() => {
