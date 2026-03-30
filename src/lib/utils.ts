@@ -6,8 +6,6 @@ export const getProxyImageUrl = (url: string | undefined): string => {
         return url;
     }
 
-    // Pass through Next.js Image Optimizer API to bypass client-side firewalls
-    // Using a default width of 384 for shop items (a reasonable balance for quality/speed)
-    // You can adjust w=... if you need higher resolution. valid widths: 16, 32, 48, 64, 96, 128, 256, 384, 512, 1080...
-    return `/_next/image?url=${encodeURIComponent(url)}&w=384&q=75`;
+    // 커스텀 프록시 API를 통과시켜 학교 방화벽 및 Vercel 402(과금) 에러 한도 1000장 우회 
+    return `/api/proxy-image?url=${encodeURIComponent(url)}`;
 };
