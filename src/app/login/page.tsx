@@ -15,6 +15,7 @@ export default function LoginPage() {
     const [studentCode, setStudentCode] = useState('');
     const [studentTeacherId, setStudentTeacherId] = useState('');
     const [isStudentAgreed, setIsStudentAgreed] = useState(false);
+    const [cachedStudents, setCachedStudents] = useState<any[]>([]);
 
     // --- TEACHER STATE ---
     const [apiKey, setApiKey] = useState('');
@@ -35,7 +36,18 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
+        const cacheStr = localStorage.getItem('studentLoginCache');
+        if (cacheStr) {
+            try {
+                setCachedStudents(JSON.parse(cacheStr));
+            } catch (e) {}
+        }
+        
         localStorage.clear();
+        
+        if (cacheStr) {
+            localStorage.setItem('studentLoginCache', cacheStr);
+        }
     }, []);
 
     // --- UTILS ---
@@ -223,6 +235,25 @@ export default function LoginPage() {
                 localStorage.setItem('studentCookie', studentData.totalCookie.toString());
                 localStorage.setItem('classCode', teacherInfo.classCode);
                 localStorage.setItem('className', teacherInfo.className);
+
+                // Update Login Cache
+                const tInfoId = loginTeacherId || studentTeacherId || teacherInfo.teacherId;
+                if (tInfoId) {
+                    const cacheStr = localStorage.getItem('studentLoginCache') || '[]';
+                    let loginCache = [];
+                    try {
+                        loginCache = JSON.parse(cacheStr);
+                    } catch (e) {}
+                    
+                    loginCache = loginCache.filter((c: any) => c.code !== studentData.code);
+                    loginCache.unshift({
+                        code: studentData.code,
+                        name: studentData.name,
+                        teacherId: tInfoId
+                    });
+                    loginCache = loginCache.slice(0, 5); // Keep recent 5
+                    localStorage.setItem('studentLoginCache', JSON.stringify(loginCache));
+                }
 
                 window.location.href = '/shop';
             } else {
@@ -554,7 +585,27 @@ export default function LoginPage() {
 
                                     {isStudentAgreed ? (
                                         <div className="animate-fade-in-up">
-                                            <h3 className="text-xl font-bold text-gray-800 mb-6">학생 코드를 입력하세요</h3>
+                                            {cachedStudents.length > 0 && teacherInfo && (
+                                                <div className="mb-6 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                                                    <label className="block text-sm font-bold text-indigo-800 mb-2">최근 로그인 기록 (클릭 시 자동 입장)</label>
+                                                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                                                        {cachedStudents.filter(c => c.teacherId === studentTeacherId || !studentTeacherId).map((c, i) => (
+                                                            <button 
+                                                                key={i} 
+                                                                onClick={() => handleStudentLogin(c.code)}
+                                                                className="shrink-0 px-4 py-2 bg-white border border-indigo-200 rounded-lg text-indigo-700 font-bold hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm text-sm"
+                                                            >
+                                                                {c.name}
+                                                            </button>
+                                                        ))}
+                                                        {cachedStudents.filter(c => c.teacherId === studentTeacherId || !studentTeacherId).length === 0 && (
+                                                            <span className="text-sm text-gray-500 py-1">기록이 없습니다.</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <h3 className="text-xl font-bold text-gray-800 mb-4">새로운 코드로 로그인</h3>
                                             <div className="mb-4">
                                                 {/* Student Code (Invite Code) - 9 chars */}
                                                 <SegmentedInput
@@ -565,7 +616,7 @@ export default function LoginPage() {
                                                     autoFocus={true}
                                                 />
                                             </div>
-                                            <p className="text-xs text-gray-400">내 &apos;다했니&apos; 학생 코드 9자리를 입력해주세요.</p>
+                                            <p className="text-xs text-gray-400">내 &apos;다했니&apos; 학생 코드 9자리를 직접 입력해주세요.</p>
                                         </div>
                                     ) : (
                                         <div className="py-8 opacity-50 flex flex-col items-center justify-center transition-opacity duration-300">

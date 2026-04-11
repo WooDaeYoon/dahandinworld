@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { firebaseService, SquareParticipant, ChatMessage, ShopItem } from '@/lib/firebase/core';
 import AvatarDisplay from '../shop/AvatarDisplay';
+import { getProxyImageUrl } from '@/lib/utils';
 
 export default function SquareSystem() {
     const router = useRouter();
@@ -12,8 +13,13 @@ export default function SquareSystem() {
     const [studentName, setStudentName] = useState<string | null>(null);
 
     const [participants, setParticipants] = useState<SquareParticipant[]>([]);
+    const [selectedParticipant, setSelectedParticipant] = useState<SquareParticipant | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState('');
+
+    const [isTeacherMessageModalOpen, setIsTeacherMessageModalOpen] = useState(false);
+    const [teacherMessageText, setTeacherMessageText] = useState('');
+    const [isSendingTeacherMessage, setIsSendingTeacherMessage] = useState(false);
 
     // For speech bubbles: Map studentCode -> { message, expiresAt }
     const [bubbles, setBubbles] = useState<Record<string, { message: string, expiresAt: number }>>({});
@@ -220,6 +226,23 @@ export default function SquareSystem() {
         }
     };
 
+    const handleSendTeacherMessage = async () => {
+        if (!teacherMessageText.trim() || !classCode || !studentCode || !studentName) return;
+        
+        setIsSendingTeacherMessage(true);
+        try {
+            await firebaseService.sendTeacherMessage(classCode, studentCode, studentName, teacherMessageText);
+            setTeacherMessageText('');
+            setIsTeacherMessageModalOpen(false);
+            alert("선생님께 편지가 전달되었습니다!");
+        } catch (error) {
+            console.error(error);
+            alert("전송 중 오류가 발생했습니다.");
+        } finally {
+            setIsSendingTeacherMessage(false);
+        }
+    };
+
     const handleExit = async () => {
         if (classCode && studentCode) {
             await firebaseService.leaveSquare(classCode, studentCode);
@@ -247,6 +270,12 @@ export default function SquareSystem() {
                     </span>
                 </div>
                 <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsTeacherMessageModalOpen(true)}
+                        className="px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 font-bold text-sm flex items-center gap-1"
+                    >
+                        <span>📨</span> 선생님께 편지쓰기
+                    </button>
                     <button
                         onClick={handleExit}
                         className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 font-bold text-sm"
@@ -287,7 +316,10 @@ export default function SquareSystem() {
                                 )}
 
                                 {/* Avatar */}
-                                <div className="relative transform transition-transform hover:scale-110 duration-300 drop-shadow-xl">
+                                <div 
+                                    className="relative transform transition-transform hover:scale-110 duration-300 drop-shadow-xl cursor-pointer"
+                                    onClick={() => setSelectedParticipant(user)}
+                                >
                                     <AvatarDisplay
                                         equippedItems={user.avatarConfig || {}}
                                         size={140}
@@ -394,6 +426,103 @@ export default function SquareSystem() {
                     50% { transform: translate(-50%, -5px); }
                 }
             `}</style>
+
+            {/* Teacher Message Modal */}
+            {isTeacherMessageModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+                        <div className="bg-yellow-50 p-4 border-b border-yellow-100 flex justify-between items-center">
+                            <h3 className="font-bold text-yellow-800 flex items-center gap-2">
+                                <span>📨</span> 선생님께 편지쓰기
+                            </h3>
+                            <button onClick={() => setIsTeacherMessageModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold">
+                                &times;
+                            </button>
+                        </div>
+                        <div className="p-4">
+                            <p className="text-sm text-gray-600 mb-4">
+                                광장에서 선생님에게 하고 싶은 말이나 질문이 있다면 적어주세요. 선생님의 확인용 편지함으로 전송됩니다.
+                            </p>
+                            <textarea
+                                value={teacherMessageText}
+                                onChange={(e) => setTeacherMessageText(e.target.value)}
+                                placeholder="여기에 내용을 입력하세요..."
+                                className="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none resize-none mb-4"
+                                maxLength={200}
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setIsTeacherMessageModalOpen(false)}
+                                    className="flex-1 py-2 font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                                >
+                                    취소
+                                </button>
+                                <button
+                                    onClick={handleSendTeacherMessage}
+                                    disabled={!teacherMessageText.trim() || isSendingTeacherMessage}
+                                    className="flex-1 py-2 font-bold text-white bg-yellow-500 hover:bg-yellow-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isSendingTeacherMessage ? '전송 중...' : '보내기'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Student Detail Modal */}
+            {selectedParticipant && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedParticipant(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative flex flex-col" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setSelectedParticipant(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 z-10 p-1 bg-white rounded-full transition-colors border shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                        
+                        <div className="p-6 border-b text-center relative bg-gradient-to-b from-green-50 to-white">
+                            <div className="mx-auto w-32 h-32 mt-2 mb-4 bg-white rounded-full shadow-inner border border-green-100 flex items-center justify-center relative overflow-hidden">
+                                <AvatarDisplay equippedItems={selectedParticipant.avatarConfig || {}} size={120} />
+                            </div>
+                            <h3 className="text-xl font-black text-gray-800">{selectedParticipant.name}</h3>
+                            <p className="text-sm text-gray-500 font-medium mt-1">
+                                {selectedParticipant.studentCode === studentCode ? '내 아바타' : '친구 아바타'}
+                            </p>
+                        </div>
+                        
+                        <div className="p-6 bg-gray-50 flex-1 overflow-y-auto">
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">
+                                    <span>👕</span> 착용 중인 아이템
+                                </h4>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['background', 'hair', 'face', 'outfit', 'accessory', 'cookie'].map(category => {
+                                        const item = selectedParticipant.avatarConfig?.[category];
+                                        return (
+                                            <div key={category} className="border border-gray-100 rounded-lg p-2 flex flex-col items-center bg-gray-50 text-center">
+                                                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden mb-1 border border-gray-100">
+                                                    {item?.imageUrl ? (
+                                                        <img src={getProxyImageUrl(item.imageUrl)} alt={item.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-gray-300 text-[10px]">없음</span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[9px] font-bold text-gray-400 mb-0.5">{
+                                                    category === 'background' ? '배경' :
+                                                    category === 'hair' ? '헤어' :
+                                                    category === 'face' ? '얼굴' :
+                                                    category === 'outfit' ? '의상' :
+                                                    category === 'accessory' ? '액세서리' : '쿠키맛'
+                                                }</div>
+                                                <div className="text-[10px] font-bold text-gray-700 break-all line-clamp-1 w-full leading-tight" title={item?.name || '미착용'}>
+                                                    {item?.name || '미착용'}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

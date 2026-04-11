@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { firebaseService, ShopItem, SquareParticipant } from '@/lib/firebase/core';
+import { firebaseService, ShopItem, SquareParticipant, Thermometer, TeacherMessage } from '@/lib/firebase/core';
 import { dahandinClient } from '@/lib/dahandin/client';
 import AvatarDisplay from './AvatarDisplay';
 import { getProxyImageUrl } from '@/lib/utils';
@@ -32,7 +32,7 @@ export default function AdminShop() {
     const [className, setClassName] = useState<string | null>(null);
 
     const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'cookie' | 'others' | 'consumable'>('all');
-    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square'>('shop');
+    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages'>('shop');
     const [students, setStudents] = useState<any[]>([]);
     const [itemType, setItemType] = useState<'permanent' | 'consumable'>('permanent');
     const [couponsData, setCouponsData] = useState<{ student: any, items: ShopItem[] }[]>([]);
@@ -58,6 +58,17 @@ export default function AdminShop() {
     // Square Management State
     const [squareParticipants, setSquareParticipants] = useState<SquareParticipant[]>([]);
     const [squareConfig, setSquareConfig] = useState<{ background?: string; isRestricted?: boolean; allowedTimeSlots?: { start: string, end: string }[] }>({ background: 'bg.png' });
+
+    const [thermometers, setThermometers] = useState<Thermometer[]>([]);
+    const [newThermometer, setNewThermometer] = useState<Partial<Thermometer>>({
+        name: '',
+        targetDegree: 100,
+        cookiesPerDegree: 10
+    });
+    const [loadingThermometers, setLoadingThermometers] = useState(false);
+
+    // Teacher Messages State
+    const [teacherMessages, setTeacherMessages] = useState<TeacherMessage[]>([]);
 
     const categories = [
         { id: 'all', label: '전체' },
@@ -89,6 +100,18 @@ export default function AdminShop() {
             console.error(error);
         } finally {
             setLoadingCoupons(false);
+        }
+    };
+
+    const fetchThermometers = async (code: string) => {
+        setLoadingThermometers(true);
+        try {
+            const data = await firebaseService.getThermometers(code);
+            setThermometers(data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoadingThermometers(false);
         }
     };
 
@@ -167,6 +190,9 @@ export default function AdminShop() {
             if (storedClassCode !== 'GLOBAL') {
                 fetchStudents(storedClassCode);
                 fetchCoupons(storedClassCode);
+                fetchStudents(storedClassCode);
+                fetchCoupons(storedClassCode);
+                fetchThermometers(storedClassCode);
             }
         } else {
             alert("학급 정보가 없습니다. 다시 로그인해주세요.");
@@ -201,9 +227,15 @@ export default function AdminShop() {
             setSquareConfig(config || { background: 'bg.png' });
         });
 
+        // Teacher Messages Subscription
+        const unsubMessages = firebaseService.subscribeToTeacherMessages(classCode, (msgs) => {
+            setTeacherMessages(msgs);
+        });
+
         return () => {
             unsubParticipants();
             unsubConfig();
+            unsubMessages();
         };
     }, [classCode, activeTab]);
 
@@ -481,6 +513,30 @@ export default function AdminShop() {
         }
     };
 
+    const handleAddThermometer = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!classCode || !newThermometer.name || !newThermometer.targetDegree || !newThermometer.cookiesPerDegree) return;
+        try {
+            await firebaseService.addThermometer(classCode, newThermometer as Thermometer);
+            setNewThermometer({ name: '', targetDegree: 100, cookiesPerDegree: 10 });
+            alert("온도계가 추가되었습니다.");
+            fetchThermometers(classCode);
+        } catch (error) {
+            alert("온도계 추가 실패");
+        }
+    };
+
+    const handleDeleteThermometer = async (id: string) => {
+        if (!classCode || !id) return;
+        if (!confirm("정말 이 온도계를 삭제하시겠습니까?")) return;
+        try {
+            await firebaseService.deleteThermometer(classCode, id);
+            fetchThermometers(classCode);
+        } catch (error) {
+            alert("삭제 실패");
+        }
+    };
+
     const handleToggleVisibility = async (itemId: string, currentHidden: boolean) => {
         if (!classCode) return;
         try {
@@ -551,6 +607,39 @@ export default function AdminShop() {
                         </div>
                         
                         <div className="p-6 bg-gray-50 flex-1 overflow-y-auto custom-scrollbar">
+                            {/* Equipped Items Info */}
+                            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-6">
+                                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <span>👕</span> 착용 중인 아이템
+                                </h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    {['background', 'hair', 'face', 'outfit', 'accessory', 'cookie'].map(category => {
+                                        const item = selectedStudent.equippedItems?.[category];
+                                        return (
+                                            <div key={category} className="border border-gray-100 rounded-lg p-2 flex flex-col items-center bg-gray-50 shadow-sm text-center transition-colors hover:border-indigo-200">
+                                                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center overflow-hidden mb-2 border border-gray-100 shrink-0">
+                                                    {item?.imageUrl ? (
+                                                        <img src={getProxyImageUrl(item.imageUrl)} alt={item.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-gray-300 text-xs">없음</span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[10px] font-bold text-gray-400 mb-0.5">{
+                                                    category === 'background' ? '배경' :
+                                                    category === 'hair' ? '헤어' :
+                                                    category === 'face' ? '얼굴' :
+                                                    category === 'outfit' ? '의상' :
+                                                    category === 'accessory' ? '액세서리' : '쿠키맛'
+                                                }</div>
+                                                <div className="text-xs font-bold text-gray-800 break-all line-clamp-2 w-full leading-tight" title={item?.name || '미착용'}>
+                                                    {item?.name || '미착용'}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            
                             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-6">
                                 <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
                                     <span>🍪</span> 선생님 쿠키 선물하기
@@ -630,37 +719,66 @@ export default function AdminShop() {
                 </header>
 
                 {classCode && classCode !== 'GLOBAL' && (
-                    <div className="flex gap-4 mb-8 border-b pb-4 overflow-x-auto whitespace-nowrap scrollbar-hide">
-                        <button
-                            onClick={() => setActiveTab('shop')}
-                            className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'shop' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            🛍️ 상점 관리
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('students')}
-                            className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'students' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            👨‍🎓 우리 반 아바타 보기
-                        </button>
-                        <button
-                            onClick={() => { 
-                                setActiveTab('coupons'); 
-                                setSelectedCouponId(null); 
-                                setIsIssuingCoupon(false);
-                                setUseSelectedStudents([]);
-                                classCode && fetchCoupons(classCode); 
-                            }}
-                            className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'coupons' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            🎟️ 쿠폰 관리
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('square')}
-                            className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'square' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            🌳 광장 관리
-                        </button>
+                    <div className="flex flex-col gap-4 mb-8">
+                        <div className="flex gap-4 border-b pb-4 overflow-x-auto whitespace-nowrap scrollbar-hide">
+                            <button
+                                onClick={() => setActiveTab('shop')}
+                                className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'shop' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                🛍️ 상점 관리
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('students')}
+                                className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'students' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                👨‍🎓 우리 반 아바타 보기
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('square')}
+                                className={`text-xl md:text-2xl font-bold transition-colors relative ${['square', 'coupons', 'thermometers'].includes(activeTab) ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                ⚙️ 기능 관리
+                                {teacherMessages.filter(m => !m.isRead).length > 0 && (
+                                    <span className="absolute -top-1 -right-4 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                                        {teacherMessages.filter(m => !m.isRead).length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+
+                        {['square', 'coupons', 'thermometers'].includes(activeTab) && (
+                            <div className="flex gap-3 flex-wrap animate-fade-in">
+                                <button
+                                    onClick={() => setActiveTab('square')}
+                                    className={`px-4 py-2 rounded-full font-bold text-sm transition-colors flex items-center gap-2 ${activeTab === 'square' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                                >
+                                    🌳 광장 관리
+                                    {teacherMessages.filter(m => !m.isRead).length > 0 && (
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'square' ? 'bg-white text-indigo-600' : 'bg-red-500 text-white'}`}>
+                                            {teacherMessages.filter(m => !m.isRead).length}
+                                        </span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => { 
+                                        setActiveTab('coupons'); 
+                                        setSelectedCouponId(null); 
+                                        setIsIssuingCoupon(false);
+                                        setUseSelectedStudents([]);
+                                        classCode && fetchCoupons(classCode); 
+                                    }}
+                                    className={`px-4 py-2 rounded-full font-bold text-sm transition-colors ${activeTab === 'coupons' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                                >
+                                    🎟️ 쿠폰 관리
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('thermometers')}
+                                    className={`px-4 py-2 rounded-full font-bold text-sm transition-colors ${activeTab === 'thermometers' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                                >
+                                    🌡️ 학급온도 관리
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -824,7 +942,12 @@ export default function AdminShop() {
                                                 setImageFile(file);
                                                 if (file) {
                                                     const objectUrl = URL.createObjectURL(file);
-                                                    setNewItem(prev => ({ ...prev, imageUrl: objectUrl }));
+                                                    const fileNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name;
+                                                    setNewItem(prev => ({ 
+                                                        ...prev, 
+                                                        imageUrl: objectUrl,
+                                                        name: prev.name || fileNameWithoutExt 
+                                                    }));
                                                 }
                                             }}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -1535,6 +1658,160 @@ export default function AdminShop() {
                                 )}
                             </div>
                         </div>
+
+                        {/* --- 선생님 편지함 (광장 관리 탭 안에 포함됨) --- */}
+                        <div className="mt-8 border-t pt-8">
+                            <div className="mb-6">
+                                <h2 className="text-xl font-bold text-gray-800">📩 학생 편지함</h2>
+                                <p className="text-sm text-gray-500 mt-1">광장에서 학생들이 보낸 편지나 질문을 확인합니다.</p>
+                            </div>
+                            
+                            <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                                {teacherMessages.length === 0 ? (
+                                    <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl">
+                                        아직 도착한 편지가 없습니다.
+                                    </div>
+                                ) : (
+                                    teacherMessages.map(msg => (
+                                        <div key={msg.id} className={`p-4 rounded-xl border transition-all ${msg.isRead ? 'bg-gray-50 border-gray-100 opacity-70' : 'bg-yellow-50 border-yellow-200 shadow-sm'}`}>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-8 h-8 bg-yellow-200 rounded-full flex items-center justify-center text-sm">
+                                                        ✉️
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-gray-800">{msg.studentName} <span className="text-xs font-normal text-gray-500 ml-1">({msg.studentCode})</span></div>
+                                                        <div className="text-[10px] text-gray-400">
+                                                            {msg.timestamp ? msg.timestamp.toDate().toLocaleString('ko-KR') : '방금 전'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    {!msg.isRead && (
+                                                        <button 
+                                                            onClick={() => classCode && msg.id && firebaseService.markTeacherMessageRead(classCode, msg.id)}
+                                                            className="px-3 py-1 bg-white border border-gray-300 text-gray-600 rounded-md text-xs font-bold hover:bg-gray-50 transition-colors"
+                                                        >
+                                                            읽음 처리
+                                                        </button>
+                                                    )}
+                                                    <button 
+                                                        onClick={() => {
+                                                            if (confirm("편지를 삭제하시겠습니까?")) {
+                                                                classCode && msg.id && firebaseService.deleteTeacherMessage(classCode, msg.id);
+                                                            }
+                                                        }}
+                                                        className="px-3 py-1 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-md text-xs font-bold transition-colors"
+                                                    >
+                                                        삭제
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="ml-10 text-gray-700 whitespace-pre-wrap bg-white p-3 rounded-lg border border-yellow-100/50">
+                                                {msg.message}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                        {/* --- 편지함 끝 --- */}
+
+                    </div>
+                ) : activeTab === 'thermometers' ? (
+                    <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                        <div className="mb-6 border-b pb-4">
+                            <h2 className="text-xl font-bold text-gray-800">🌡️ 학급온도 관리</h2>
+                            <p className="text-sm text-gray-500 mt-1">우리 반에 여러 개의 온도계를 설정하고 기부 방향을 다양하게 열어주세요.</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="bg-orange-50/50 p-5 rounded-lg border border-orange-100 h-fit">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4">새 온도계 추가하기 🌟</h3>
+                                <form onSubmit={handleAddThermometer} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">온도계 이름</label>
+                                        <input
+                                            type="text"
+                                            value={newThermometer.name}
+                                            onChange={e => setNewThermometer({...newThermometer, name: e.target.value})}
+                                            placeholder="예: 불우이웃 돕기"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">목표 온도</label>
+                                            <input
+                                                type="number"
+                                                value={newThermometer.targetDegree}
+                                                onChange={e => setNewThermometer({...newThermometer, targetDegree: Number(e.target.value)})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none"
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">1도당 필요 쿠키</label>
+                                            <input
+                                                type="number"
+                                                value={newThermometer.cookiesPerDegree}
+                                                onChange={e => setNewThermometer({...newThermometer, cookiesPerDegree: Number(e.target.value)})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    <button 
+                                        type="submit" 
+                                        className="w-full py-2 bg-gradient-to-r from-orange-400 to-red-500 text-white font-bold rounded-lg shadow-sm hover:from-orange-500 hover:to-red-600 transition-colors"
+                                    >
+                                        온도계 생성
+                                    </button>
+                                </form>
+                            </div>
+
+                            <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4 flex justify-between items-center">
+                                    등록된 온도계 목록
+                                    <button onClick={() => classCode && fetchThermometers(classCode)} className="text-sm px-2 py-1 bg-white border rounded text-gray-600 hover:bg-gray-100">새로고침</button>
+                                </h3>
+                                
+                                {loadingThermometers ? (
+                                    <div className="text-center py-8 text-gray-400">데이터를 불러오는 중입니다...</div>
+                                ) : thermometers.length === 0 ? (
+                                    <div className="text-center py-8 bg-white rounded-lg border border-dashed border-gray-300 text-gray-500 text-sm">
+                                        등록된 온도계가 없습니다.<br/>(미등록 시 기존 '쿠키월드 사랑의 온도'가 표시됩니다)
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-3">
+                                        {thermometers.map(t => (
+                                            <div key={t.id} className="bg-white p-4 rounded-lg flex flex-col gap-2 border border-orange-100 shadow-sm relative group overflow-hidden">
+                                                <div className="absolute right-3 top-3">
+                                                    <button onClick={() => handleDeleteThermometer(t.id!)} className="text-gray-300 hover:text-red-500 transition-colors font-bold text-xl px-1">
+                                                        &times;
+                                                    </button>
+                                                </div>
+                                                <div className="font-bold text-lg text-gray-800 pr-8">{t.name}</div>
+                                                <div className="text-xs text-gray-500 flex gap-2">
+                                                    <span>목표 <b className="text-gray-700">{t.targetDegree}도</b></span> | 
+                                                    <span>게이지 <b className="text-gray-700">{t.cookiesPerDegree}쿠키/1도</b></span>
+                                                </div>
+                                                <div className="bg-gray-100 h-4 rounded-full mt-1 overflow-hidden relative">
+                                                    <div 
+                                                        className="bg-gradient-to-r from-orange-400 to-red-500 h-full transition-all"
+                                                        style={{ width: `${Math.min((t.currentDegree / t.targetDegree) * 100, 100)}%` }}
+                                                    ></div>
+                                                </div>
+                                                <div className="text-right text-xs font-bold text-orange-600 mt-1">
+                                                    {t.currentDegree.toFixed(1)}도 / {t.targetDegree}도
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 ) : null}
             </div>
@@ -1561,6 +1838,22 @@ export default function AdminShop() {
                     <div className="flex flex-col">
                         <span className="text-[10px] font-bold opacity-80 leading-tight">다했니 월드 사용자를 위한</span>
                         <span className="font-bold text-sm leading-tight mt-0.5">오픈채팅방</span>
+                    </div>
+                </a>
+            </div>
+
+            {/* Left Side Floating Buttons */}
+            <div className="fixed left-4 bottom-28 flex flex-col gap-3 z-50">
+                <a
+                    href="https://works.do/xH2hEjZ"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex text-center items-center justify-center px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 group gap-2"
+                >
+                    <span className="text-xl group-hover:scale-110 transition-transform font-normal">📁</span>
+                    <div className="flex flex-col text-left">
+                        <span className="text-[10px] font-bold text-emerald-100 leading-tight">학생들을 위한</span>
+                        <span className="font-bold text-sm leading-tight mt-0.5">디자인 공유 폴더</span>
                     </div>
                 </a>
             </div>

@@ -4,11 +4,12 @@ interface ConfirmModalProps {
     isOpen: boolean;
     title: string;
     message: string;
+    children?: React.ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
 }
 
-export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, onConfirm, onCancel }) => {
+export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, children, onConfirm, onCancel }) => {
     if (!isOpen) return null;
 
     return (
@@ -19,7 +20,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
                         <span className="text-3xl">🛒</span>
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-                    <p className="text-gray-500 mb-6">{message}</p>
+                    <p className={`text-gray-500 ${children ? 'mb-4' : 'mb-6'}`}>{message}</p>
+                    {children && <div className="mb-6 text-left">{children}</div>}
 
                     <div className="flex gap-3">
                         <button

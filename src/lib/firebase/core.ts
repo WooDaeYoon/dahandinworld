@@ -27,6 +27,14 @@ export interface ShopItem {
 }
 
 
+export interface Thermometer {
+    id?: string;
+    name: string;
+    targetDegree: number;
+    cookiesPerDegree: number;
+    currentDegree: number;
+}
+
 export interface ChatMessage {
     id?: string;
     studentCode: string;
@@ -40,6 +48,15 @@ export interface SquareParticipant {
     name: string;
     avatarConfig: Record<string, ShopItem>; // Equipped items
     lastActive: any;
+}
+
+export interface TeacherMessage {
+    id?: string;
+    studentCode: string;
+    studentName: string;
+    message: string;
+    timestamp: any;
+    isRead: boolean;
 }
 
 const CLASSES_COLLECTION = 'classes';
@@ -174,6 +191,65 @@ export const firebaseService = {
         } catch (error) {
             console.error("Error deleting item:", error);
             throw error;
+        }
+    },
+
+    // Delete Item
+    deleteChatMessage: async (classCode: string, messageId: string) => {
+        try {
+            await deleteDoc(doc(db, `${getResolvedPath(classCode)}/chat`, messageId));
+        } catch (error) {
+            console.error(error);
+        }
+    },
+
+    // ==========================================
+    // Teacher Messages (Inbox) Functions
+    // ==========================================
+    sendTeacherMessage: async (classCode: string, studentCode: string, studentName: string, message: string) => {
+        try {
+            const msgsRef = collection(db, `${getResolvedPath(classCode)}/teacherMessages`);
+            await addDoc(msgsRef, {
+                studentCode,
+                studentName,
+                message,
+                isRead: false,
+                timestamp: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Error sending message to teacher:", error);
+            throw error;
+        }
+    },
+
+    subscribeToTeacherMessages: (classCode: string, callback: (msgs: TeacherMessage[]) => void) => {
+        const msgsRef = collection(db, `${getResolvedPath(classCode)}/teacherMessages`);
+        const q = query(msgsRef, orderBy('timestamp', 'desc'), limit(50));
+
+        return onSnapshot(q, (snapshot) => {
+            const msgs = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as TeacherMessage[];
+            callback(msgs);
+        });
+    },
+
+    markTeacherMessageRead: async (classCode: string, messageId: string) => {
+        try {
+            const msgRef = doc(db, `${getResolvedPath(classCode)}/teacherMessages`, messageId);
+            await updateDoc(msgRef, { isRead: true });
+        } catch (error) {
+            console.error("Error marking message as read:", error);
+        }
+    },
+
+    deleteTeacherMessage: async (classCode: string, messageId: string) => {
+        try {
+            const msgRef = doc(db, `${getResolvedPath(classCode)}/teacherMessages`, messageId);
+            await deleteDoc(msgRef);
+        } catch (error) {
+            console.error("Error deleting teacher message:", error);
         }
     },
 
@@ -533,6 +609,60 @@ export const firebaseService = {
         } catch (error) {
             console.error("Error calculating donated cookies:", error);
             return 0;
+        }
+    },
+
+    // --- THERMOMETER SYSTEM (Custom Class Thermometers) ---
+    getThermometers: async (classCode: string): Promise<Thermometer[]> => {
+        try {
+            if (!classCode) return [];
+            const q = collection(db, `${getResolvedPath(classCode)}/thermometers`);
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Thermometer)).sort((a,b) => a.name.localeCompare(b.name));
+        } catch (error) {
+            console.error("Error getting thermometers:", error);
+            return [];
+        }
+    },
+
+    addThermometer: async (classCode: string, data: Thermometer) => {
+        try {
+            if (!classCode) return;
+            const collectionPath = `${getResolvedPath(classCode)}/thermometers`;
+            await addDoc(collection(db, collectionPath), { ...data, currentDegree: 0 });
+        } catch (error) {
+            console.error("Error adding thermometer:", error);
+            throw error;
+        }
+    },
+
+    updateThermometer: async (classCode: string, id: string, updates: Partial<Thermometer>) => {
+        try {
+            const ref = doc(db, `${getResolvedPath(classCode)}/thermometers`, id);
+            await updateDoc(ref, updates);
+        } catch (error) {
+            console.error("Error updating thermometer:", error);
+            throw error;
+        }
+    },
+
+    deleteThermometer: async (classCode: string, id: string) => {
+        try {
+            const ref = doc(db, `${getResolvedPath(classCode)}/thermometers`, id);
+            await deleteDoc(ref);
+        } catch (error) {
+            console.error("Error deleting thermometer:", error);
+            throw error;
+        }
+    },
+
+    increaseThermometer: async (classCode: string, id: string, amount: number, cookiesPerDegree: number) => {
+        try {
+            const incrementValue = amount / cookiesPerDegree;
+            const ref = doc(db, `${getResolvedPath(classCode)}/thermometers`, id);
+            await setDoc(ref, { currentDegree: increment(incrementValue) }, { merge: true });
+        } catch (error) {
+            console.error("Error increasing thermometer:", error);
         }
     },
 

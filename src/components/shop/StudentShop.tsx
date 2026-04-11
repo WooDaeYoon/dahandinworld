@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { firebaseService, ShopItem } from '@/lib/firebase/core';
+import { firebaseService, ShopItem, Thermometer } from '@/lib/firebase/core';
 import { dahandinClient } from '@/lib/dahandin/client';
 import { DahandinBadge } from '@/types';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -20,6 +20,9 @@ export default function StudentShop() {
     const [studentCode, setStudentCode] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [classCode, setClassCode] = useState('');
+    
+    // Thermometer State
+    const [thermometers, setThermometers] = useState<Thermometer[]>([]);
 
     const [inventory, setInventory] = useState<ShopItem[]>([]);
     const [equippedItems, setEquippedItems] = useState<Record<string, ShopItem>>({});
@@ -42,6 +45,7 @@ export default function StudentShop() {
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
+    const [selectedThermometerId, setSelectedThermometerId] = useState<string>('');
 
     // Hover State (for Shop Only)
     const [hoveredItem, setHoveredItem] = useState<ShopItem | null>(null);
@@ -72,6 +76,7 @@ export default function StudentShop() {
         if (storedClassCode) {
             fetchItems(storedClassCode);
             fetchGlobalStats(storedClassCode);
+            fetchThermometers(storedClassCode);
         }
 
         if (storedStudentCode && storedClassCode && storedApiKey) {
@@ -148,6 +153,11 @@ export default function StudentShop() {
         setLoveTemperature(temp);
     };
 
+    const fetchThermometers = async (cCode: string) => {
+        const list = await firebaseService.getThermometers(cCode);
+        setThermometers(list);
+    };
+
     const fetchStudentStats = async (code: string, cCode: string) => {
         const donated = await firebaseService.getStudentDonation(cCode, code);
         setDonatedCookies(donated);
@@ -160,6 +170,11 @@ export default function StudentShop() {
             return;
         }
         setSelectedItem(item);
+        if (item.isDonation && thermometers.length > 0) {
+            setSelectedThermometerId(thermometers[0].id!);
+        } else {
+            setSelectedThermometerId('');
+        }
         setIsModalOpen(true);
     };
 
@@ -176,12 +191,22 @@ export default function StudentShop() {
         try {
             if (item.isDonation) {
                 await firebaseService.recordDonation(classCode, studentCode, item.price);
-                await firebaseService.increaseLoveTemperature(classCode, item.price);
+                
+                if (thermometers.length > 0 && selectedThermometerId) {
+                    const targetThermometer = thermometers.find(t => t.id === selectedThermometerId);
+                    if (targetThermometer) {
+                        await firebaseService.increaseThermometer(classCode, targetThermometer.id!, item.price, targetThermometer.cookiesPerDegree);
+                        fetchThermometers(classCode);
+                        alert(`기부해주셔서 감사합니다! ${targetThermometer.name}의 온도가 올라갔습니다.`);
+                    }
+                } else {
+                    await firebaseService.increaseLoveTemperature(classCode, item.price);
+                    fetchGlobalStats(classCode);
+                    alert(`기부해주셔서 감사합니다! 사랑의 온도가 ${(item.price * 0.01).toFixed(1)}도 올랐습니다.`);
+                }
+                
                 await firebaseService.recordTransaction(classCode, studentCode, item.price, 'donation', undefined, '기부');
-
                 fetchStudentStats(studentCode, classCode);
-                fetchGlobalStats(classCode);
-                alert(`기부해주셔서 감사합니다! 사랑의 온도가 ${(item.price * 0.01).toFixed(1)}도 올랐습니다.`);
             } else {
                 await firebaseService.purchaseItem(classCode, studentCode, item);
                 await firebaseService.recordTransaction(classCode, studentCode, item.price, 'purchase', item.id, item.name);
@@ -268,11 +293,26 @@ export default function StudentShop() {
         >
             <ConfirmModal
                 isOpen={isModalOpen}
-                title="아이템 구매"
-                message={`${selectedItem?.name}을(를) 구매하시겠습니까?`}
+                title={selectedItem?.isDonation ? "기부하기" : "아이템 구매"}
+                message={selectedItem?.isDonation ? `${selectedItem?.name}을(를) 기부하시겠습니까?` : `${selectedItem?.name}을(를) 구매하시겠습니까?`}
                 onConfirm={confirmPurchase}
                 onCancel={() => setIsModalOpen(false)}
-            />
+            >
+                {selectedItem?.isDonation && thermometers.length > 0 && (
+                    <div className="mt-2 text-left">
+                        <label className="block text-sm font-bold text-gray-700 mb-2">어느 온도계에 기부할까요?</label>
+                        <select
+                            value={selectedThermometerId}
+                            onChange={(e) => setSelectedThermometerId(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                        >
+                            {thermometers.map(t => (
+                                <option key={t.id} value={t.id}>{t.name} (목표: {t.targetDegree}도)</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+            </ConfirmModal>
 
             {/* Floating Tooltip for Shop Item Hover */}
             {hoveredItem && activeTab === 'shop' && (
@@ -367,20 +407,43 @@ export default function StudentShop() {
                         </div>
                     </div>
 
-                    {/* Love Temperature (Global) */}
-                    <div className="bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
-                        <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
-                            <span>🌡️</span> 쿠키월드 사랑의 온도
-                        </h2>
-                        <div className="text-4xl font-black mb-2">{loveTemperature.toFixed(1)}°C</div>
-                        <div className="w-full bg-white/30 rounded-full h-2">
-                            <div
-                                className="bg-white h-2 rounded-full transition-all duration-1000"
-                                style={{ width: `${Math.min(loveTemperature, 100)}%` }}
-                            ></div>
+                    {/* Love Temperature (Global / Class) */}
+                    {thermometers.length > 0 ? (
+                        <div className="space-y-4">
+                            {thermometers.map((t, idx) => (
+                                <div key={t.id || idx} className="bg-gradient-to-br from-orange-400 to-red-600 rounded-2xl shadow-lg p-6 text-white">
+                                    <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
+                                        <span>🌡️</span> {t.name}
+                                    </h2>
+                                    <div className="flex justify-between items-end mb-2">
+                                        <div className="text-4xl font-black">{t.currentDegree.toFixed(1)}°C</div>
+                                        <div className="text-sm font-bold text-white/90">목표: {t.targetDegree}°C</div>
+                                    </div>
+                                    <div className="w-full bg-white/30 rounded-full h-2">
+                                        <div
+                                            className="bg-white h-2 rounded-full transition-all duration-1000"
+                                            style={{ width: `${Math.min((t.currentDegree / t.targetDegree) * 100, 100)}%` }}
+                                        ></div>
+                                    </div>
+                                    <p className="text-xs mt-2 text-white/80">친구들과 함께 기부하여 목표를 달성하세요!</p>
+                                </div>
+                            ))}
                         </div>
-                        <p className="text-xs mt-2 text-white/80">친구들의 기부로 온도가 올라갑니다!</p>
-                    </div>
+                    ) : (
+                        <div className="bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
+                            <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
+                                <span>🌡️</span> 쿠키월드 사랑의 온도
+                            </h2>
+                            <div className="text-4xl font-black mb-2">{loveTemperature.toFixed(1)}°C</div>
+                            <div className="w-full bg-white/30 rounded-full h-2">
+                                <div
+                                    className="bg-white h-2 rounded-full transition-all duration-1000"
+                                    style={{ width: `${Math.min(loveTemperature, 100)}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-xs mt-2 text-white/80">친구들의 기부로 온도가 올라갑니다!</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Right Side: Shop & Inventory */}
