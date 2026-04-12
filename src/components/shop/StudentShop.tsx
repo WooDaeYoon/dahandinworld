@@ -265,7 +265,9 @@ export default function StudentShop() {
 
 
     const handleLogout = () => {
+        const cache = localStorage.getItem('studentLoginCache');
         localStorage.clear(); // Clear all
+        if (cache) localStorage.setItem('studentLoginCache', cache);
         window.location.href = '/login';
     };
 
