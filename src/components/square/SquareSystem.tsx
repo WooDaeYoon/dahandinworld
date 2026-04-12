@@ -129,7 +129,7 @@ export default function SquareSystem() {
             hasJoinedRef.current = false;
             // Delay alert slightly to let DOM unmount processing finish properly
             setTimeout(() => {
-                alert("선생님에 의해 광장에서 내보내졌습니다.");
+                alert("광장에서 나갑니다.");
                 router.replace('/shop');
             }, 100);
         }
