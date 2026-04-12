@@ -65,8 +65,17 @@ schools/
         └── {teacherId}/
             └── classes/
                 └── {classId}/
-                    ├── shopItems/
-                    └── square_chat/
+                    ├── shopItems/              # Class-specific shop items
+                    ├── chat/                   # Square real-time chat logs
+                    ├── teacherMessages/        # Private letters sent to the teacher
+                    ├── thermometers/           # Custom thermometer donation goals
+                    ├── square_online/          # Real-time presences in Square
+                    ├── settings/
+                    │   └── shop/               # Configs (e.g., square background)
+                    └── students/               # Class roster
+                        └── {studentCode}/      # Student stats, cookies, equipped items
+                            ├── inventory/      # Student's purchased items
+                            └── cookielog/      # Transaction history of cookies
 
 teachers/
 └── {teacherId} (stores teacher info/metadata)
