@@ -267,6 +267,15 @@ export default function LoginPage() {
         }
     };
 
+    const handleRemoveCache = (codeToRemove: string) => {
+        const newCache = cachedStudents.filter(c => c.code !== codeToRemove);
+        setCachedStudents(newCache);
+        if (newCache.length > 0) {
+            localStorage.setItem('studentLoginCache', JSON.stringify(newCache));
+        } else {
+            localStorage.removeItem('studentLoginCache');
+        }
+    };
     return (
         <div className="min-h-screen flex items-center justify-center bg-black p-4 relative overflow-hidden">
             {/* Video Background */}
@@ -590,13 +599,21 @@ export default function LoginPage() {
                                                     <label className="block text-sm font-bold text-indigo-800 mb-2">최근 로그인 기록 (클릭 시 자동 입장)</label>
                                                     <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
                                                         {cachedStudents.filter(c => c.teacherId === studentTeacherId || !studentTeacherId).map((c, i) => (
-                                                            <button 
-                                                                key={i} 
-                                                                onClick={() => handleStudentLogin(c.code)}
-                                                                className="shrink-0 px-4 py-2 bg-white border border-indigo-200 rounded-lg text-indigo-700 font-bold hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm text-sm"
-                                                            >
-                                                                {c.name}
-                                                            </button>
+                                                            <div key={i} className="shrink-0 flex items-center bg-white border border-indigo-200 rounded-lg overflow-hidden shadow-sm hover:border-indigo-300 transition-colors group">
+                                                                <button 
+                                                                    onClick={() => handleStudentLogin(c.code)}
+                                                                    className="px-3 py-2 text-indigo-700 font-bold hover:bg-indigo-50 transition-colors text-sm"
+                                                                >
+                                                                    {c.name}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleRemoveCache(c.code)}
+                                                                    className="px-2 py-2 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors border-l border-indigo-100"
+                                                                    title="기록 삭제"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                                </button>
+                                                            </div>
                                                         ))}
                                                         {cachedStudents.filter(c => c.teacherId === studentTeacherId || !studentTeacherId).length === 0 && (
                                                             <span className="text-sm text-gray-500 py-1">기록이 없습니다.</span>
