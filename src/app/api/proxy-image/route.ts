@@ -9,9 +9,9 @@ export async function GET(request: NextRequest) {
         return new NextResponse('Missing url parameter', { status: 400 });
     }
 
-    // Basic security check to prevent abuse of the proxy
-    if (!url.startsWith('https://firebasestorage.googleapis.com')) {
-        return new NextResponse('Invalid URL domain', { status: 403 });
+    // Allow specific domains or just allow https for images to support external badge URLs
+    if (!url.startsWith('https://')) {
+        return new NextResponse('Invalid URL scheme, must be https', { status: 403 });
     }
 
     try {

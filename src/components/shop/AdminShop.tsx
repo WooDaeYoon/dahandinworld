@@ -33,6 +33,7 @@ export default function AdminShop() {
 
     const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'cookie' | 'others' | 'consumable'>('all');
     const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages'>('shop');
+    const [selectedThermometerForDetails, setSelectedThermometerForDetails] = useState<Thermometer | null>(null);
     const [students, setStudents] = useState<any[]>([]);
     const [itemType, setItemType] = useState<'permanent' | 'consumable'>('permanent');
     const [couponsData, setCouponsData] = useState<{ student: any, items: ShopItem[] }[]>([]);
@@ -403,6 +404,7 @@ export default function AdminShop() {
             const layers = [
                 { type: 'background', url: eq.background?.imageUrl, style: eq.background?.style },
                 { type: 'body', url: '/assets/avatar/base_body.png', style: null },
+                { type: 'cookie', url: eq.cookie?.imageUrl, style: eq.cookie?.style },
                 { type: 'face', url: eq.face?.imageUrl, style: eq.face?.style },
                 { type: 'hair', url: eq.hair?.imageUrl, style: eq.hair?.style },
                 { type: 'outfit', url: eq.outfit?.imageUrl, style: eq.outfit?.style },
@@ -711,6 +713,12 @@ export default function AdminShop() {
                         {className && <p className="text-gray-500 mt-1">접속 중인 학급: <span className="font-bold text-indigo-600">{className}</span></p>}
                     </div>
                     <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => window.open('https://woodaeyoon.github.io/pixelmaker/', '_blank')}
+                            className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors flex items-center gap-2"
+                        >
+                            <span>🎨</span> 아이템 만들기
+                        </button>
                         <button
                             onClick={handleLogout}
                             className="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-bold hover:bg-red-200 transition-colors"
@@ -1266,7 +1274,7 @@ export default function AdminShop() {
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-2">어떤 쿠폰을 지급할까요?</label>
                                         <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                                            {items.filter(item => item.isConsumable && !item.isHidden).map(coupon => (
+                                            {items.filter(item => item.isConsumable).map(coupon => (
                                                 <button
                                                     key={coupon.id}
                                                     onClick={() => setIssueSelectedCoupon(coupon.id!)}
@@ -1279,7 +1287,7 @@ export default function AdminShop() {
                                                     {coupon.name}
                                                 </button>
                                             ))}
-                                            {items.filter(item => item.isConsumable && !item.isHidden).length === 0 && (
+                                            {items.filter(item => item.isConsumable).length === 0 && (
                                                 <p className="text-sm text-gray-500 col-span-2">등록된 쿠폰이 없습니다.</p>
                                             )}
                                         </div>
@@ -1350,12 +1358,12 @@ export default function AdminShop() {
                         ) : !selectedCouponId ? (
                             // 쿠폰 종류 목록 표시
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                {items.filter(item => item.isConsumable && !item.isHidden).length === 0 ? (
+                                {items.filter(item => item.isConsumable).length === 0 ? (
                                     <div className="col-span-full text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                                         <p>등록된 쿠폰이 없어요.</p>
                                     </div>
                                 ) : (
-                                    items.filter(item => item.isConsumable && !item.isHidden).map(coupon => (
+                                    items.filter(item => item.isConsumable).map(coupon => (
                                         <button
                                             key={coupon.id}
                                             onClick={() => setSelectedCouponId(coupon.id!)}
@@ -1788,9 +1796,19 @@ export default function AdminShop() {
                                 ) : (
                                     <div className="flex flex-col gap-3">
                                         {thermometers.map(t => (
-                                            <div key={t.id} className="bg-white p-4 rounded-lg flex flex-col gap-2 border border-orange-100 shadow-sm relative group overflow-hidden">
-                                                <div className="absolute right-3 top-3">
-                                                    <button onClick={() => handleDeleteThermometer(t.id!)} className="text-gray-300 hover:text-red-500 transition-colors font-bold text-xl px-1">
+                                            <div 
+                                                key={t.id} 
+                                                className="bg-white p-4 rounded-lg flex flex-col gap-2 border border-orange-100 shadow-sm relative group overflow-hidden cursor-pointer hover:border-orange-300 transition-colors"
+                                                onClick={() => setSelectedThermometerForDetails(t)}
+                                            >
+                                                <div className="absolute right-3 top-3 z-10">
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteThermometer(t.id!);
+                                                        }} 
+                                                        className="text-gray-300 hover:text-red-500 transition-colors font-bold text-xl px-1"
+                                                    >
                                                         &times;
                                                     </button>
                                                 </div>
@@ -1859,6 +1877,67 @@ export default function AdminShop() {
                     </div>
                 </a>
             </div>
+            {/* Thermometer Details Modal */}
+            {selectedThermometerForDetails && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedThermometerForDetails(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden relative flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setSelectedThermometerForDetails(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 z-10 p-1 bg-white rounded-full transition-colors border shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+
+                        <div className="bg-gradient-to-br from-orange-50 to-red-50 p-6 text-center border-b border-orange-100 relative">
+                            <h2 className="text-2xl font-black text-gray-800">{selectedThermometerForDetails.name}</h2>
+                            <p className="text-sm text-gray-600 mt-2">학생별 기부 현황 및 기여도</p>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-gray-50">
+                            {(() => {
+                                const contributors = selectedThermometerForDetails.contributors || {};
+                                const contributorEntries = Object.entries(contributors).sort((a, b) => b[1] - a[1]); // Sort by amount descending
+                                
+                                // Calculate total cookies from contributors to show percentage
+                                const totalDonatedCookies = contributorEntries.reduce((sum, [_, amount]) => sum + amount, 0);
+
+                                if (contributorEntries.length === 0) {
+                                    return (
+                                        <div className="text-center py-10 text-gray-500 bg-white rounded-xl border border-dashed border-gray-200">
+                                            아직 이 온도계에 기부한 학생이 없습니다.
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center px-2 mb-2">
+                                            <span className="text-sm font-bold text-gray-600">총 기부량: {totalDonatedCookies} 쿠키</span>
+                                            <span className="text-sm font-bold text-gray-600">총 {contributorEntries.length}명 참여</span>
+                                        </div>
+                                        {contributorEntries.map(([studentCode, amount]) => {
+                                            const student = students.find(s => s.id === studentCode);
+                                            const studentName = student ? student.name : studentCode;
+                                            const percentage = totalDonatedCookies > 0 ? ((amount / totalDonatedCookies) * 100).toFixed(1) : "0.0";
+                                            
+                                            return (
+                                                <div key={studentCode} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-2 relative overflow-hidden">
+                                                    <div className="flex justify-between items-center z-10 relative">
+                                                        <span className="font-bold text-gray-800">{studentName}</span>
+                                                        <div className="text-right">
+                                                            <span className="text-orange-600 font-bold">{amount} 쿠키</span>
+                                                            <span className="text-xs text-gray-500 ml-2">({percentage}%)</span>
+                                                        </div>
+                                                    </div>
+                                                    {/* Progress bar background */}
+                                                    <div className="absolute left-0 bottom-0 top-0 bg-orange-50 z-0 transition-all" style={{ width: `${percentage}%` }}></div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

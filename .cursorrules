@@ -68,7 +68,7 @@ schools/
                     ├── shopItems/              # Class-specific shop items
                     ├── chat/                   # Square real-time chat logs
                     ├── teacherMessages/        # Private letters sent to the teacher
-                    ├── thermometers/           # Custom thermometer donation goals
+                    ├── thermometers/           # Custom thermometer donation goals (includes contributors map)
                     ├── square_online/          # Real-time presences in Square
                     ├── settings/
                     │   └── shop/               # Configs (e.g., square background)

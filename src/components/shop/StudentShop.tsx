@@ -195,7 +195,7 @@ export default function StudentShop() {
                 if (thermometers.length > 0 && selectedThermometerId) {
                     const targetThermometer = thermometers.find(t => t.id === selectedThermometerId);
                     if (targetThermometer) {
-                        await firebaseService.increaseThermometer(classCode, targetThermometer.id!, item.price, targetThermometer.cookiesPerDegree);
+                        await firebaseService.increaseThermometer(classCode, targetThermometer.id!, item.price, targetThermometer.cookiesPerDegree, studentCode);
                         fetchThermometers(classCode);
                         alert(`기부해주셔서 감사합니다! ${targetThermometer.name}의 온도가 올라갔습니다.`);
                     }
@@ -246,6 +246,74 @@ export default function StudentShop() {
         } catch (error) {
             console.error("Failed to toggle equip:", error);
             alert("장착 변경에 실패했습니다.");
+        }
+    };
+
+    const handleDownloadAvatar = async () => {
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            // Draw background
+            ctx.fillStyle = '#eff6ff'; // bg-blue-50
+            ctx.fillRect(0, 0, 400, 400);
+
+            const eq = equippedItems || {};
+            const layers = [
+                { type: 'background', url: eq.background?.imageUrl, style: eq.background?.style },
+                { type: 'body', url: '/assets/avatar/base_body.png', style: null },
+                { type: 'cookie', url: eq.cookie?.imageUrl, style: eq.cookie?.style },
+                { type: 'face', url: eq.face?.imageUrl, style: eq.face?.style },
+                { type: 'hair', url: eq.hair?.imageUrl, style: eq.hair?.style },
+                { type: 'outfit', url: eq.outfit?.imageUrl, style: eq.outfit?.style },
+                { type: 'accessory', url: eq.accessory?.imageUrl, style: eq.accessory?.style },
+            ];
+
+            const validLayers = layers.filter(l => l.url);
+            
+            for (const layer of validLayers) {
+                try {
+                    const response = await fetch(getProxyImageUrl(layer.url!));
+                    const blob = await response.blob();
+                    const objectUrl = URL.createObjectURL(blob);
+                    
+                    await new Promise<void>((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const style = layer.style;
+                            if (style && layer.type !== 'body' && layer.type !== 'background') {
+                                const w = (style.width / 100) * 400;
+                                const h = img.height * (w / img.width);
+                                const x = (style.x / 100) * 400;
+                                const y = (style.y / 100) * 400;
+                                ctx.drawImage(img, x, y, w, h);
+                            } else {
+                                ctx.drawImage(img, 0, 0, 400, 400);
+                            }
+                            URL.revokeObjectURL(objectUrl);
+                            resolve();
+                        };
+                        img.onerror = () => {
+                            URL.revokeObjectURL(objectUrl);
+                            resolve();
+                        };
+                        img.src = objectUrl;
+                    });
+                } catch (e) {
+                    console.error("Failed to load image layer", e);
+                }
+            }
+
+            const link = document.createElement('a');
+            link.download = `${studentName}_내캐릭터.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (err) {
+            console.error(err);
+            alert("이미지 저장에 실패했습니다.");
         }
     };
 
@@ -347,8 +415,15 @@ export default function StudentShop() {
                     {/* Character Section */}
                     <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col items-center">
                         <h2 className="text-xl font-bold text-gray-800 mb-4">내 캐릭터</h2>
-                        <div className="mb-4">
+                        <div className="mb-4 relative group">
                             <AvatarDisplay equippedItems={equippedItems} size={200} />
+                            <button 
+                                onClick={handleDownloadAvatar}
+                                className="absolute -bottom-2 -right-2 bg-indigo-600 text-white p-2.5 rounded-full shadow-lg hover:bg-indigo-700 hover:scale-110 transition-all cursor-pointer z-10 border-2 border-white"
+                                title="PNG 이미지로 다운로드"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            </button>
                         </div>
                         <p className="text-gray-500 text-sm">아이템을 장착하여 꾸며보세요!</p>
                     </div>
@@ -470,6 +545,12 @@ export default function StudentShop() {
                                 <div className="text-sm text-gray-500 hidden sm:block">
                                     {activeTab === 'shop' ? '원하는 아이템을 구매해보세요!' : '내가 보유한 아이템 목록입니다.'}
                                 </div>
+                                <button
+                                    onClick={() => window.open('https://woodaeyoon.github.io/pixelmaker/', '_blank')}
+                                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold hover:bg-blue-200 transition-colors flex items-center gap-1"
+                                >
+                                    <span>🎨</span> 아이템 만들기
+                                </button>
                                 <button
                                     onClick={() => window.location.href = '/square'}
                                     className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-bold hover:bg-green-200 transition-colors flex items-center gap-1"

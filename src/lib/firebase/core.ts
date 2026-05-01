@@ -33,6 +33,7 @@ export interface Thermometer {
     targetDegree: number;
     cookiesPerDegree: number;
     currentDegree: number;
+    contributors?: Record<string, number>;
 }
 
 export interface ChatMessage {
@@ -656,11 +657,19 @@ export const firebaseService = {
         }
     },
 
-    increaseThermometer: async (classCode: string, id: string, amount: number, cookiesPerDegree: number) => {
+    increaseThermometer: async (classCode: string, id: string, amount: number, cookiesPerDegree: number, studentCode?: string) => {
         try {
             const incrementValue = amount / cookiesPerDegree;
             const ref = doc(db, `${getResolvedPath(classCode)}/thermometers`, id);
-            await setDoc(ref, { currentDegree: increment(incrementValue) }, { merge: true });
+            
+            const updates: any = { currentDegree: increment(incrementValue) };
+            if (studentCode) {
+                updates.contributors = {
+                    [studentCode]: increment(amount)
+                };
+            }
+            
+            await setDoc(ref, updates, { merge: true });
         } catch (error) {
             console.error("Error increasing thermometer:", error);
         }

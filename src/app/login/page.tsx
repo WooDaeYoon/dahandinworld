@@ -284,7 +284,7 @@ export default function LoginPage() {
                 loop
                 muted
                 playsInline
-                className="absolute inset-0 w-full h-full object-cover opacity-90 z-0"
+                className="absolute inset-0 w-full h-full object-cover sm:object-contain opacity-90 z-0 bg-white"
             >
                 <source src="/assets/background/login-bg.mp4" type="video/mp4" />
             </video>
