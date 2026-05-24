@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { firebaseService, ShopItem, SquareParticipant, Thermometer, TeacherMessage } from '@/lib/firebase/core';
+import { firebaseService, ShopItem, SquareParticipant, Thermometer, TeacherMessage, ItemSuggestion, BankSettings } from '@/lib/firebase/core';
 import { dahandinClient } from '@/lib/dahandin/client';
 import AvatarDisplay from './AvatarDisplay';
 import { getProxyImageUrl } from '@/lib/utils';
@@ -32,7 +32,7 @@ export default function AdminShop() {
     const [className, setClassName] = useState<string | null>(null);
 
     const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'cookie' | 'others' | 'consumable'>('all');
-    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages'>('shop');
+    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages' | 'suggestions'>('shop');
     const [selectedThermometerForDetails, setSelectedThermometerForDetails] = useState<Thermometer | null>(null);
     const [students, setStudents] = useState<any[]>([]);
     const [itemType, setItemType] = useState<'permanent' | 'consumable'>('permanent');
@@ -54,6 +54,8 @@ export default function AdminShop() {
     const [studentRealCookies, setStudentRealCookies] = useState<number | null>(null);
     const [rewardAmount, setRewardAmount] = useState<number>(0);
     const [rewardReason, setRewardReason] = useState<string>('');
+    const [selectedGiftItemId, setSelectedGiftItemId] = useState<string>('');
+    const [isGiftingItem, setIsGiftingItem] = useState(false);
     const [isProvidingCookie, setIsProvidingCookie] = useState(false);
 
     // Square Management State
@@ -70,6 +72,22 @@ export default function AdminShop() {
 
     // Teacher Messages State
     const [teacherMessages, setTeacherMessages] = useState<TeacherMessage[]>([]);
+
+    // Item Suggestions State
+    const [itemSuggestions, setItemSuggestions] = useState<ItemSuggestion[]>([]);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    const [approvingSuggestion, setApprovingSuggestion] = useState<ItemSuggestion | null>(null);
+    const [approveConfig, setApproveConfig] = useState({
+        price: 0,
+        requiredLevel: 1,
+        useStock: false,
+        stock: 10,
+        isDonation: false,
+        requiredBadge: ''
+    });
+
+    const [bankSettings, setBankSettings] = useState<BankSettings>({ rate7d: 5, rate14d: 10, rate28d: 20 });
+    const [savingBankSettings, setSavingBankSettings] = useState(false);
 
     const categories = [
         { id: 'all', label: '전체' },
@@ -194,6 +212,7 @@ export default function AdminShop() {
                 fetchStudents(storedClassCode);
                 fetchCoupons(storedClassCode);
                 fetchThermometers(storedClassCode);
+                fetchBankSettings(storedClassCode);
             }
         } else {
             alert("학급 정보가 없습니다. 다시 로그인해주세요.");
@@ -216,6 +235,29 @@ export default function AdminShop() {
         }
     };
 
+    const fetchBankSettings = async (code: string) => {
+        try {
+            const settings = await firebaseService.getBankSettings(code);
+            setBankSettings(settings);
+        } catch (error) {
+            console.error("Failed to fetch bank settings:", error);
+        }
+    };
+
+    const handleSaveBankSettings = async () => {
+        if (!classCode || classCode === 'GLOBAL') return;
+        setSavingBankSettings(true);
+        try {
+            await firebaseService.updateBankSettings(classCode, bankSettings);
+            alert("은행 설정이 저장되었습니다.");
+        } catch (error) {
+            console.error(error);
+            alert("은행 설정 저장 중 오류가 발생했습니다.");
+        } finally {
+            setSavingBankSettings(false);
+        }
+    };
+
     // Set up Square Management Subscription
     useEffect(() => {
         if (!classCode || classCode === 'GLOBAL' || activeTab !== 'square') return;
@@ -228,17 +270,38 @@ export default function AdminShop() {
             setSquareConfig(config || { background: 'bg.png' });
         });
 
-        // Teacher Messages Subscription
-        const unsubMessages = firebaseService.subscribeToTeacherMessages(classCode, (msgs) => {
-            setTeacherMessages(msgs);
-        });
-
         return () => {
             unsubParticipants();
             unsubConfig();
-            unsubMessages();
         };
     }, [classCode, activeTab]);
+
+    useEffect(() => {
+        if (!classCode || classCode === 'GLOBAL') return;
+        const unsubMessages = firebaseService.subscribeToTeacherMessages(classCode, (msgs) => {
+            setTeacherMessages(msgs);
+        });
+        return () => unsubMessages();
+    }, [classCode]);
+
+    const fetchItemSuggestions = async () => {
+        if (!classCode || classCode === 'GLOBAL') return;
+        setLoadingSuggestions(true);
+        try {
+            const suggestions = await firebaseService.getItemSuggestions(classCode);
+            setItemSuggestions(suggestions);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoadingSuggestions(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'suggestions') {
+            fetchItemSuggestions();
+        }
+    }, [activeTab]);
 
     const handleAddItem = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -383,6 +446,23 @@ export default function AdminShop() {
             alert("쿠키 지급 중 오류가 발생했습니다.");
         } finally {
             setIsProvidingCookie(false);
+        }
+    };
+
+    const handleGiftItem = async () => {
+        if (!selectedGiftItemId || !selectedStudent || !classCode) return;
+        const targetItem = items.find(i => i.id === selectedGiftItemId);
+        if (!targetItem) return;
+        setIsGiftingItem(true);
+        try {
+            await firebaseService.grantItemToStudent(classCode, selectedStudent.id, targetItem);
+            alert(`${selectedStudent.name} 학생에게 ${targetItem.name} 아이템을 선물했습니다!`);
+            setSelectedGiftItemId('');
+        } catch (error) {
+            console.error(error);
+            alert("아이템 선물 중 오류가 발생했습니다.");
+        } finally {
+            setIsGiftingItem(false);
         }
     };
 
@@ -555,6 +635,74 @@ export default function AdminShop() {
         }
     };
 
+    const handleApproveSuggestion = (suggestion: ItemSuggestion) => {
+        setApprovingSuggestion(suggestion);
+        setApproveConfig({
+            price: 100, // Default price
+            requiredLevel: 1,
+            useStock: false,
+            stock: 10,
+            isDonation: false,
+            requiredBadge: ''
+        });
+    };
+
+    const handleConfirmApprove = async () => {
+        if (!classCode || !approvingSuggestion) return;
+        
+        try {
+            const newItem = {
+                ...approvingSuggestion.item,
+                price: approveConfig.price,
+                requiredLevel: approveConfig.requiredLevel,
+                useStock: approveConfig.useStock,
+                stock: approveConfig.stock,
+                isDonation: approveConfig.isDonation,
+                requiredBadge: approveConfig.requiredBadge
+            };
+            
+            await firebaseService.approveItemSuggestion(classCode, approvingSuggestion.id!, newItem);
+            alert("아이템이 승인되어 상점에 추가되었습니다.");
+            setApprovingSuggestion(null);
+            fetchItemSuggestions();
+            fetchItems(classCode);
+        } catch (error) {
+            console.error(error);
+            alert("승인 중 오류가 발생했습니다.");
+        }
+    };
+
+    const handleRejectSuggestion = async (suggestionId: string) => {
+        if (!classCode) return;
+        if (!confirm("이 제안을 거절(삭제)하시겠습니까?")) return;
+
+        try {
+            await firebaseService.deleteItemSuggestion(classCode, suggestionId);
+            fetchItemSuggestions();
+        } catch (error) {
+            console.error(error);
+            alert("거절 중 오류가 발생했습니다.");
+        }
+    };
+
+    const handleDownloadImage = async (url: string, name: string) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = `${name}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Failed to download image", error);
+            alert("이미지 다운로드에 실패했습니다.");
+        }
+    };
+
     const filteredItems = items
         .filter(item => {
             if (selectedCategory === 'all') return true;
@@ -617,8 +765,10 @@ export default function AdminShop() {
                                     <span>👕</span> 착용 중인 아이템
                                 </h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                    {['background', 'hair', 'face', 'outfit', 'accessory', 'cookie'].map(category => {
+                                    {['background', 'hair', 'face', 'outfit', 'accessory', 'accessory_0', 'accessory_1', 'accessory_2', 'cookie'].map(category => {
                                         const item = selectedStudent.equippedItems?.[category];
+                                        if (category.startsWith('accessory_') && !item) return null;
+                                        if (category === 'accessory' && !item && ['accessory_0', 'accessory_1', 'accessory_2'].some(k => selectedStudent.equippedItems?.[k])) return null;
                                         return (
                                             <div key={category} className="border border-gray-100 rounded-lg p-2 flex flex-col items-center bg-gray-50 shadow-sm text-center transition-colors hover:border-indigo-200">
                                                 <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center overflow-hidden mb-2 border border-gray-100 shrink-0">
@@ -633,7 +783,7 @@ export default function AdminShop() {
                                                     category === 'hair' ? '헤어' :
                                                     category === 'face' ? '얼굴' :
                                                     category === 'outfit' ? '의상' :
-                                                    category === 'accessory' ? '액세서리' : '쿠키맛'
+                                                    category.startsWith('accessory') ? '액세서리' : '쿠키맛'
                                                 }</div>
                                                 <div className="text-xs font-bold text-gray-800 break-all line-clamp-2 w-full leading-tight" title={item?.name || '미착용'}>
                                                     {item?.name || '미착용'}
@@ -641,6 +791,33 @@ export default function AdminShop() {
                                             </div>
                                         );
                                     })}
+                                </div>
+                            </div>
+                            
+                            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-6">
+                                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <span>🎁</span> 선생님 아이템 선물하기
+                                </h4>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={selectedGiftItemId}
+                                        onChange={(e) => setSelectedGiftItemId(e.target.value)}
+                                        className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                    >
+                                        <option value="">아이템 선택</option>
+                                        {items.filter(i => !i.isHidden).map(item => (
+                                            <option key={item.id} value={item.id}>
+                                                {item.name} ({item.isGlobal ? '공용' : '우리반'})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button 
+                                        onClick={handleGiftItem}
+                                        disabled={isGiftingItem || !selectedGiftItemId}
+                                        className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg transition-colors shadow-sm disabled:bg-gray-300 disabled:shadow-none whitespace-nowrap"
+                                    >
+                                        선물
+                                    </button>
                                 </div>
                             </div>
                             
@@ -745,7 +922,7 @@ export default function AdminShop() {
                             </button>
                             <button
                                 onClick={() => setActiveTab('square')}
-                                className={`text-xl md:text-2xl font-bold transition-colors relative ${['square', 'coupons', 'thermometers'].includes(activeTab) ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`text-xl md:text-2xl font-bold transition-colors relative ${['square', 'coupons', 'thermometers', 'suggestions', 'bank'].includes(activeTab) ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 ⚙️ 기능 관리
                                 {teacherMessages.filter(m => !m.isRead).length > 0 && (
@@ -756,7 +933,7 @@ export default function AdminShop() {
                             </button>
                         </div>
 
-                        {['square', 'coupons', 'thermometers'].includes(activeTab) && (
+                        {['square', 'coupons', 'thermometers', 'suggestions', 'bank'].includes(activeTab) && (
                             <div className="flex gap-3 flex-wrap animate-fade-in">
                                 <button
                                     onClick={() => setActiveTab('square')}
@@ -787,6 +964,25 @@ export default function AdminShop() {
                                 >
                                     🌡️ 학급온도 관리
                                 </button>
+                                <button
+                                    onClick={() => setActiveTab('suggestions')}
+                                    className={`px-4 py-2 rounded-full font-bold text-sm transition-colors flex items-center gap-2 ${activeTab === 'suggestions' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                                >
+                                    🎁 제안된 아이템
+                                    {itemSuggestions.length > 0 && (
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'suggestions' ? 'bg-white text-indigo-600' : 'bg-yellow-500 text-white'}`}>
+                                            {itemSuggestions.length}
+                                        </span>
+                                    )}
+                                </button>
+                                {classCode !== 'GLOBAL' && (
+                                    <button
+                                        onClick={() => setActiveTab('bank')}
+                                        className={`px-4 py-2 rounded-full font-bold text-sm transition-colors flex items-center gap-2 ${activeTab === 'bank' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                                    >
+                                        🏦 은행 관리
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -1087,13 +1283,21 @@ export default function AdminShop() {
                                                                 {isHidden ? '보이기' : '숨기기'}
                                                             </button>
                                                         ) : (
-                                                            // Local item or Admin view: Show Delete
-                                                            <button
-                                                                onClick={() => item.id && handleDeleteItem(item.id)}
-                                                                className="text-red-400 hover:text-red-600 text-sm"
-                                                            >
-                                                                삭제
-                                                            </button>
+                                                            // Local item or Admin view: Show Delete and Download
+                                                            <>
+                                                                <button
+                                                                    onClick={() => item.imageUrl && handleDownloadImage(getProxyImageUrl(item.imageUrl), item.name)}
+                                                                    className="text-blue-500 hover:text-blue-700 text-xs font-bold bg-blue-50 px-2 py-1 rounded mb-1 whitespace-nowrap shrink-0"
+                                                                >
+                                                                    ⬇️ 저장
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => item.id && handleDeleteItem(item.id)}
+                                                                    className="text-red-400 hover:text-red-600 text-sm"
+                                                                >
+                                                                    삭제
+                                                                </button>
+                                                            </>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1832,6 +2036,220 @@ export default function AdminShop() {
                                 )}
                             </div>
                         </div>
+                    </div>
+                ) : activeTab === 'suggestions' ? (
+                    <div className="bg-white rounded-xl shadow-sm p-6 max-w-6xl mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-gray-800">🎁 학생들이 제안한 아이템</h2>
+                            <button onClick={fetchItemSuggestions} className="text-sm px-3 py-1 bg-gray-100 rounded-md hover:bg-gray-200 text-gray-700 font-bold">
+                                🔄 새로고침
+                            </button>
+                        </div>
+
+                        {loadingSuggestions ? (
+                            <div className="text-center py-10 text-gray-500">불러오는 중...</div>
+                        ) : itemSuggestions.length === 0 ? (
+                            <div className="text-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                <span className="text-4xl mb-4 block">💡</span>
+                                <p className="text-lg font-bold text-gray-600">제안된 아이템이 없습니다.</p>
+                                <p className="text-sm text-gray-400 mt-2">학생들이 아이템을 제안하면 여기에 표시됩니다.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {itemSuggestions.map(suggestion => (
+                                    <div key={suggestion.id} className="border border-yellow-200 rounded-xl p-4 bg-yellow-50 hover:shadow-md transition-shadow relative">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <h3 className="font-bold text-lg text-gray-800">{suggestion.item.name}</h3>
+                                                <p className="text-xs text-gray-500">제안자: <span className="font-bold">{suggestion.studentName}</span></p>
+                                            </div>
+                                            <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full font-bold">
+                                                {suggestion.item.category}
+                                            </span>
+                                        </div>
+
+                                        <div className="aspect-square bg-white rounded-lg mb-3 overflow-hidden border border-gray-100 flex items-center justify-center p-2 relative">
+                                            {suggestion.item.imageUrl && (
+                                                <img src={getProxyImageUrl(suggestion.item.imageUrl)} alt={suggestion.item.name} className="max-w-full max-h-full object-contain" />
+                                            )}
+                                        </div>
+
+                                        <div className="bg-white p-3 rounded-lg border border-yellow-100 mb-4 h-24 overflow-y-auto custom-scrollbar">
+                                            <h4 className="text-xs font-bold text-gray-600 mb-1">📝 제안 이유</h4>
+                                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{suggestion.reason || '이유 없음'}</p>
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => handleRejectSuggestion(suggestion.id!)}
+                                                className="flex-1 py-2 bg-white text-red-500 border border-red-200 rounded-lg font-bold hover:bg-red-50 transition-colors"
+                                            >
+                                                거절
+                                            </button>
+                                            <button 
+                                                onClick={() => handleApproveSuggestion(suggestion)}
+                                                className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors"
+                                            >
+                                                승인 (상점 추가)
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Approval Configuration Modal */}
+                        {approvingSuggestion && (
+                            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                                    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span>✨</span> 아이템 승인 설정
+                                    </h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">가격 (쿠키)</label>
+                                            <input
+                                                type="number"
+                                                value={approveConfig.price}
+                                                onChange={e => setApproveConfig({...approveConfig, price: Number(e.target.value)})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">구매 가능 레벨</label>
+                                            <input
+                                                type="number"
+                                                value={approveConfig.requiredLevel}
+                                                onChange={e => setApproveConfig({...approveConfig, requiredLevel: Number(e.target.value)})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1">필요 뱃지 이름 (선택)</label>
+                                            <input
+                                                type="text"
+                                                value={approveConfig.requiredBadge}
+                                                onChange={e => setApproveConfig({...approveConfig, requiredBadge: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none"
+                                                placeholder="예: 칭찬뱃지"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                            <input
+                                                type="checkbox"
+                                                id="approve-useStock"
+                                                checked={approveConfig.useStock}
+                                                onChange={e => setApproveConfig({...approveConfig, useStock: e.target.checked})}
+                                                className="w-4 h-4 text-indigo-600 rounded"
+                                            />
+                                            <label htmlFor="approve-useStock" className="text-sm font-bold text-gray-700">재고 제한 사용</label>
+                                        </div>
+                                        {approveConfig.useStock && (
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 mb-1">초기 재고 수량</label>
+                                                <input
+                                                    type="number"
+                                                    value={approveConfig.stock}
+                                                    onChange={e => setApproveConfig({...approveConfig, stock: Number(e.target.value)})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-2 mt-6">
+                                        <button
+                                            onClick={() => setApprovingSuggestion(null)}
+                                            className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold hover:bg-gray-200 transition-colors"
+                                        >
+                                            취소
+                                        </button>
+                                        <button
+                                            onClick={handleConfirmApprove}
+                                            className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors"
+                                        >
+                                            승인 완료
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : activeTab === 'bank' ? (
+                    <div className="bg-white rounded-xl shadow-sm p-6 max-w-4xl mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
+                                <span>🏦</span> 예금 이율 설정
+                            </h2>
+                            <button
+                                onClick={handleSaveBankSettings}
+                                disabled={savingBankSettings}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-bold transition-colors disabled:opacity-50"
+                            >
+                                {savingBankSettings ? '저장 중...' : '설정 저장하기'}
+                            </button>
+                        </div>
+                        <p className="text-gray-600 mb-8 border-b pb-4">
+                            다했니 은행에서 제공하는 정기예금 상품의 이자율(%)을 설정합니다. 학생들은 10쿠키 단위로 예금에 가입할 수 있습니다.
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* 7-day Deposit */}
+                            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 text-center shadow-sm">
+                                <div className="text-4xl mb-4">📅</div>
+                                <h3 className="font-bold text-lg text-gray-800 mb-2">7일 만기 예금</h3>
+                                <p className="text-sm text-gray-500 mb-4">비교적 짧은 기간 돈을 묶어두는 상품입니다.</p>
+                                <div className="flex items-center justify-center gap-2">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={bankSettings.rate7d}
+                                        onChange={(e) => setBankSettings({ ...bankSettings, rate7d: Number(e.target.value) })}
+                                        className="w-24 text-center px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xl"
+                                    />
+                                    <span className="text-gray-700 font-bold text-xl">%</span>
+                                </div>
+                            </div>
+
+                            {/* 14-day Deposit */}
+                            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 text-center shadow-sm">
+                                <div className="text-4xl mb-4">⏳</div>
+                                <h3 className="font-bold text-lg text-gray-800 mb-2">14일 만기 예금</h3>
+                                <p className="text-sm text-gray-500 mb-4">중간 기간 돈을 묶어두는 상품입니다.</p>
+                                <div className="flex items-center justify-center gap-2">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={bankSettings.rate14d}
+                                        onChange={(e) => setBankSettings({ ...bankSettings, rate14d: Number(e.target.value) })}
+                                        className="w-24 text-center px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xl"
+                                    />
+                                    <span className="text-gray-700 font-bold text-xl">%</span>
+                                </div>
+                            </div>
+
+                            {/* 28-day Deposit */}
+                            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 text-center shadow-sm">
+                                <div className="text-4xl mb-4">🕰️</div>
+                                <h3 className="font-bold text-lg text-gray-800 mb-2">28일 만기 예금</h3>
+                                <p className="text-sm text-gray-500 mb-4">한 달 가량 돈을 묶어두는 장기 상품입니다.</p>
+                                <div className="flex items-center justify-center gap-2">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={bankSettings.rate28d}
+                                        onChange={(e) => setBankSettings({ ...bankSettings, rate28d: Number(e.target.value) })}
+                                        className="w-24 text-center px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xl"
+                                    />
+                                    <span className="text-gray-700 font-bold text-xl">%</span>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 ) : null}
             </div>

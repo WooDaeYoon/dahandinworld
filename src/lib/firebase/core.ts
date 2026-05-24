@@ -60,9 +60,35 @@ export interface TeacherMessage {
     isRead: boolean;
 }
 
-const CLASSES_COLLECTION = 'classes';
+export interface ItemSuggestion {
+    id?: string;
+    item: ShopItem;
+    studentCode: string;
+    studentName: string;
+    reason: string;
+    createdAt: string;
+    status: 'pending' | 'approved' | 'rejected';
+}
 
-// Helper to resolve legacy vs new class paths
+export interface BankSettings {
+    rate7d: number;
+    rate14d: number;
+    rate28d: number;
+}
+
+export interface BankDeposit {
+    id?: string;
+    studentCode: string;
+    term: 7 | 14 | 28;
+    principal: number;
+    interestRate: number;
+    startDate: string; // ISO String
+    endDate: string; // ISO String
+    status: 'active' | 'completed';
+}
+
+
+
 const resolveClassPath = (classCode: string) => {
     // If it's a full path (e.g. schools/...), use it directly
     if (classCode.includes('/')) {
@@ -250,7 +276,63 @@ export const firebaseService = {
             const msgRef = doc(db, `${getResolvedPath(classCode)}/teacherMessages`, messageId);
             await deleteDoc(msgRef);
         } catch (error) {
-            console.error("Error deleting teacher message:", error);
+            console.error("Error deleting message:", error);
+        }
+    },
+
+    // ==========================================
+    // Item Suggestions Functions
+    // ==========================================
+    submitItemSuggestion: async (classCode: string, studentCode: string, studentName: string, itemData: ShopItem, reason: string) => {
+        try {
+            const suggestionsRef = collection(db, `${getResolvedPath(classCode)}/itemSuggestions`);
+            await addDoc(suggestionsRef, {
+                studentCode,
+                studentName,
+                item: itemData,
+                reason,
+                timestamp: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Error submitting item suggestion:", error);
+            throw error;
+        }
+    },
+
+    getItemSuggestions: async (classCode: string): Promise<ItemSuggestion[]> => {
+        try {
+            const suggestionsRef = collection(db, `${getResolvedPath(classCode)}/itemSuggestions`);
+            const q = query(suggestionsRef, orderBy('timestamp', 'desc'));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as ItemSuggestion[];
+        } catch (error) {
+            console.error("Error fetching item suggestions:", error);
+            return [];
+        }
+    },
+
+    approveItemSuggestion: async (classCode: string, suggestionId: string, itemData: ShopItem) => {
+        try {
+            // 1. Add to shopItems
+            await firebaseService.addItem(classCode, itemData);
+            // 2. Delete suggestion
+            await firebaseService.deleteItemSuggestion(classCode, suggestionId);
+        } catch (error) {
+            console.error("Error approving item suggestion:", error);
+            throw error;
+        }
+    },
+
+    deleteItemSuggestion: async (classCode: string, suggestionId: string) => {
+        try {
+            const suggestionRef = doc(db, `${getResolvedPath(classCode)}/itemSuggestions`, suggestionId);
+            await deleteDoc(suggestionRef);
+        } catch (error) {
+            console.error("Error deleting item suggestion:", error);
+            throw error;
         }
     },
 
@@ -392,6 +474,24 @@ export const firebaseService = {
         }
     },
 
+    // Grant Item to Student (Teacher Gift)
+    grantItemToStudent: async (classCode: string, studentCode: string, item: ShopItem) => {
+        try {
+            if (!item.id || !classCode || !studentCode) return;
+            const inventoryRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}/inventory`, item.id);
+            const docSnap = await getDoc(inventoryRef);
+
+            if (docSnap.exists()) {
+                await updateDoc(inventoryRef, { quantity: increment(1) });
+            } else {
+                await setDoc(inventoryRef, { ...item, quantity: 1, purchasedAt: new Date().toISOString() });
+            }
+        } catch (error) {
+            console.error("Error granting item:", error);
+            throw error;
+        }
+    },
+
     // Use Consumable Item
     useConsumableItem: async (classCode: string, studentCode: string, itemId: string) => {
         try {
@@ -435,12 +535,13 @@ export const firebaseService = {
     },
 
     // Equip Item
-    equipItem: async (classCode: string, studentCode: string, item: ShopItem) => {
+    equipItem: async (classCode: string, studentCode: string, item: ShopItem, slotKey?: string) => {
         try {
             if (!classCode || !item.category) return;
             const studentRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}`);
+            const key = slotKey || item.category;
             await setDoc(studentRef, {
-                equippedItems: { [item.category]: item }
+                equippedItems: { [key]: item }
             }, { merge: true });
         } catch (error) {
             console.error("Error equipping:", error);
@@ -504,9 +605,9 @@ export const firebaseService = {
             snapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.amount) {
-                    if (data.type === 'purchase' || data.type === 'donation') {
+                    if (data.type === 'purchase' || data.type === 'donation' || data.type === 'deposit') {
                         totalUsed += Number(data.amount);
-                    } else if (data.type === 'reward') {
+                    } else if (data.type === 'reward' || data.type === 'deposit_claim') {
                         totalUsed -= Number(data.amount);
                     }
                 }
@@ -926,6 +1027,110 @@ export const firebaseService = {
             return data.url;
         } catch (error) {
             console.error("Upload error:", error);
+            throw error;
+        }
+    },
+
+    // ==========================================
+    // Bank Functions
+    // ==========================================
+
+    getBankSettings: async (classCode: string): Promise<BankSettings> => {
+        try {
+            const settingsRef = doc(db, `${getResolvedPath(classCode)}/settings/bank`);
+            const snapshot = await getDoc(settingsRef);
+            if (snapshot.exists()) {
+                return snapshot.data() as BankSettings;
+            }
+            return { rate7d: 5, rate14d: 10, rate28d: 20 }; // Defaults
+        } catch (error) {
+            console.error("Error fetching bank settings:", error);
+            return { rate7d: 5, rate14d: 10, rate28d: 20 };
+        }
+    },
+
+    updateBankSettings: async (classCode: string, settings: BankSettings) => {
+        try {
+            const settingsRef = doc(db, `${getResolvedPath(classCode)}/settings/bank`);
+            await setDoc(settingsRef, settings, { merge: true });
+        } catch (error) {
+            console.error("Error updating bank settings:", error);
+            throw error;
+        }
+    },
+
+    buyDeposit: async (classCode: string, studentCode: string, term: 7 | 14 | 28, principal: number, rate: number) => {
+        try {
+            const studentRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}`);
+            
+            // Deduct cookies (increment usedCookies)
+            await setDoc(studentRef, { usedCookies: increment(principal) }, { merge: true });
+
+            const logRef = collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/cookielog`);
+            await addDoc(logRef, {
+                amount: principal, // Log as positive principal amount used
+                type: 'deposit',
+                itemId: 'bank_deposit',
+                itemName: `다했니월드 은행 ${term}일 예금 가입`,
+                createdAt: new Date().toISOString()
+            });
+
+            const startDate = new Date();
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + term);
+
+            const depositRef = collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/bankDeposits`);
+            await addDoc(depositRef, {
+                studentCode,
+                term,
+                principal,
+                interestRate: rate,
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+                status: 'active'
+            });
+
+        } catch (error) {
+            console.error("Error buying deposit:", error);
+            throw error;
+        }
+    },
+
+    getDeposits: async (classCode: string, studentCode: string): Promise<BankDeposit[]> => {
+        try {
+            const depositRef = collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/bankDeposits`);
+            const q = query(depositRef, orderBy('startDate', 'desc'));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BankDeposit));
+        } catch (error) {
+            console.error("Error fetching deposits:", error);
+            return [];
+        }
+    },
+
+    claimDeposit: async (classCode: string, studentCode: string, depositId: string, principal: number, interestRate: number) => {
+        try {
+            const depositRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}/bankDeposits/${depositId}`);
+            await updateDoc(depositRef, { status: 'completed' });
+
+            const interest = Math.floor(principal * (interestRate / 100));
+            const totalReward = principal + interest;
+
+            const studentRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}`);
+            // Grant cookies (decrement usedCookies)
+            await setDoc(studentRef, { usedCookies: increment(-totalReward) }, { merge: true });
+
+            const logRef = collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/cookielog`);
+            await addDoc(logRef, {
+                amount: totalReward,
+                type: 'deposit_claim',
+                itemId: 'bank_deposit_claim',
+                itemName: `은행 예금 만기 수령 (원금 ${principal} + 이자 ${interest})`,
+                createdAt: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error("Error claiming deposit:", error);
             throw error;
         }
     }

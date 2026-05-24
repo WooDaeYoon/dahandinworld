@@ -493,8 +493,10 @@ export default function SquareSystem() {
                                     <span>👕</span> 착용 중인 아이템
                                 </h4>
                                 <div className="grid grid-cols-3 gap-2">
-                                    {['background', 'hair', 'face', 'outfit', 'accessory', 'cookie'].map(category => {
+                                    {['background', 'hair', 'face', 'outfit', 'accessory', 'accessory_0', 'accessory_1', 'accessory_2', 'cookie'].map(category => {
                                         const item = selectedParticipant.avatarConfig?.[category];
+                                        if (category.startsWith('accessory_') && !item) return null;
+                                        if (category === 'accessory' && !item && ['accessory_0', 'accessory_1', 'accessory_2'].some(k => selectedParticipant.avatarConfig?.[k])) return null;
                                         return (
                                             <div key={category} className="border border-gray-100 rounded-lg p-2 flex flex-col items-center bg-gray-50 text-center">
                                                 <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden mb-1 border border-gray-100">
@@ -509,7 +511,7 @@ export default function SquareSystem() {
                                                     category === 'hair' ? '헤어' :
                                                     category === 'face' ? '얼굴' :
                                                     category === 'outfit' ? '의상' :
-                                                    category === 'accessory' ? '액세서리' : '쿠키맛'
+                                                    category.startsWith('accessory') ? '액세서리' : '쿠키맛'
                                                 }</div>
                                                 <div className="text-[10px] font-bold text-gray-700 break-all line-clamp-1 w-full leading-tight" title={item?.name || '미착용'}>
                                                     {item?.name || '미착용'}

@@ -47,9 +47,20 @@ export default function StudentShop() {
     const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
     const [selectedThermometerId, setSelectedThermometerId] = useState<string>('');
 
-    // Hover State (for Shop Only)
     const [hoveredItem, setHoveredItem] = useState<ShopItem | null>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+    // Item Suggestion State
+    const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false);
+    const [suggestItemReason, setSuggestItemReason] = useState('');
+    const [suggestItemData, setSuggestItemData] = useState<Partial<ShopItem>>({
+        name: '',
+        category: 'accessory',
+        style: { x: 0, y: 0, width: 100 },
+        imageUrl: ''
+    });
+    const [suggestImageFile, setSuggestImageFile] = useState<File | null>(null);
+    const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
 
     useEffect(() => {
         // Load user info from localStorage
@@ -163,6 +174,42 @@ export default function StudentShop() {
         setDonatedCookies(donated);
     };
 
+    const handleSuggestSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!suggestItemData.name || !suggestImageFile || !classCode || !studentCode) {
+            alert("이름과 이미지를 모두 입력해주세요.");
+            return;
+        }
+        setIsSubmittingSuggestion(true);
+        try {
+            const downloadUrl = await firebaseService.uploadImage(suggestImageFile);
+
+            const newItem: ShopItem = {
+                ...suggestItemData as ShopItem,
+                imageUrl: downloadUrl,
+                price: 0,
+                requiredLevel: 0,
+                requiredBadge: '',
+                isDonation: false,
+                useStock: false,
+                stock: 0,
+                isConsumable: false,
+            };
+
+            await firebaseService.submitItemSuggestion(classCode, studentCode, studentName, newItem, suggestItemReason);
+            alert("아이템 제안이 완료되었습니다! 선생님의 승인을 기다려주세요.");
+            setIsSuggestModalOpen(false);
+            setSuggestItemData({ name: '', category: 'accessory', style: { x: 0, y: 0, width: 100 }, imageUrl: '' });
+            setSuggestImageFile(null);
+            setSuggestItemReason('');
+        } catch (error) {
+            console.error(error);
+            alert("제안 중 오류가 발생했습니다.");
+        } finally {
+            setIsSubmittingSuggestion(false);
+        }
+    };
+
     const initiatePurchase = (item: ShopItem) => {
         const realCookies = cookies - usedCookies;
         if (realCookies < item.price) {
@@ -225,22 +272,52 @@ export default function StudentShop() {
         if (!classCode || !item.category) return;
 
         try {
-            const isEquipped = equippedItems[item.category]?.id === item.id;
+            let equippedSlotKey: string | null = null;
+            if (item.category === 'accessory') {
+                for (const key of ['accessory', 'accessory_0', 'accessory_1', 'accessory_2']) {
+                    if (equippedItems[key]?.id === item.id) {
+                        equippedSlotKey = key;
+                        break;
+                    }
+                }
+            } else {
+                if (equippedItems[item.category]?.id === item.id) {
+                    equippedSlotKey = item.category;
+                }
+            }
+
+            const isEquipped = equippedSlotKey !== null;
 
             if (isEquipped) {
                 // Unequip
-                await firebaseService.unequipItem(classCode, studentCode, item.category);
+                await firebaseService.unequipItem(classCode, studentCode, equippedSlotKey!);
                 setEquippedItems(prev => {
                     const next = { ...prev };
-                    delete next[item.category!];
+                    delete next[equippedSlotKey!];
                     return next;
                 });
             } else {
                 // Equip
-                await firebaseService.equipItem(classCode, studentCode, item);
+                let targetSlotKey = item.category;
+                if (item.category === 'accessory') {
+                    targetSlotKey = null as any;
+                    for (let i = 0; i < 3; i++) {
+                        const slotKey = `accessory_${i}`;
+                        if (!equippedItems[slotKey]) {
+                            targetSlotKey = slotKey;
+                            break;
+                        }
+                    }
+                    if (!targetSlotKey) {
+                        alert("악세사리는 최대 3개까지만 착용할 수 있습니다. 기존 악세사리를 해제해주세요.");
+                        return;
+                    }
+                }
+
+                await firebaseService.equipItem(classCode, studentCode, item, targetSlotKey);
                 setEquippedItems(prev => ({
                     ...prev,
-                    [item.category!]: item
+                    [targetSlotKey]: item
                 }));
             }
         } catch (error) {
@@ -270,6 +347,9 @@ export default function StudentShop() {
                 { type: 'hair', url: eq.hair?.imageUrl, style: eq.hair?.style },
                 { type: 'outfit', url: eq.outfit?.imageUrl, style: eq.outfit?.style },
                 { type: 'accessory', url: eq.accessory?.imageUrl, style: eq.accessory?.style },
+                { type: 'accessory_0', url: eq.accessory_0?.imageUrl, style: eq.accessory_0?.style },
+                { type: 'accessory_1', url: eq.accessory_1?.imageUrl, style: eq.accessory_1?.style },
+                { type: 'accessory_2', url: eq.accessory_2?.imageUrl, style: eq.accessory_2?.style },
             ];
 
             const validLayers = layers.filter(l => l.url);
@@ -384,29 +464,6 @@ export default function StudentShop() {
                 )}
             </ConfirmModal>
 
-            {/* Floating Tooltip for Shop Item Hover */}
-            {hoveredItem && activeTab === 'shop' && (
-                <div 
-                    className="fixed pointer-events-none z-50 animate-fade-in-up"
-                    style={{ 
-                        left: `${mousePos.x + 15}px`, 
-                        top: `${mousePos.y + 15}px`,
-                        transform: 'translate(0, 0)' // Always attach relative to cursor directly
-                    }}
-                >
-                    <div className="bg-white rounded-2xl shadow-[0_10px_40px_-5px_rgba(0,0,0,0.3)] border-2 border-indigo-100 p-6 flex flex-col items-center relative">
-                        {/* Speech bubble tail */}
-                        <div className="absolute -left-2 top-4 w-4 h-4 bg-white border-l-2 border-t-2 border-indigo-100 transform -rotate-45"></div>
-                        <h4 className="text-sm font-bold text-gray-700 mb-4 whitespace-nowrap">장착 모습</h4>
-                        <AvatarDisplay 
-                            equippedItems={{
-                                [hoveredItem.category || '']: hoveredItem // 장착된 템은 비우고 호버중인 단일템만
-                            }} 
-                            size={120} 
-                        />
-                    </div>
-                </div>
-            )}
 
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-8">
 
@@ -541,25 +598,34 @@ export default function StudentShop() {
                                     🎒 보관함
                                 </button>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <div className="text-sm text-gray-500 hidden sm:block">
-                                    {activeTab === 'shop' ? '원하는 아이템을 구매해보세요!' : '내가 보유한 아이템 목록입니다.'}
-                                </div>
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     onClick={() => window.open('https://woodaeyoon.github.io/pixelmaker/', '_blank')}
-                                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold hover:bg-blue-200 transition-colors flex items-center gap-1"
+                                    className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold hover:bg-blue-200 transition-colors flex items-center gap-1"
                                 >
                                     <span>🎨</span> 아이템 만들기
                                 </button>
                                 <button
+                                    onClick={() => setIsSuggestModalOpen(true)}
+                                    className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-bold hover:bg-yellow-200 transition-colors flex items-center gap-1"
+                                >
+                                    <span>💡</span> 아이템 제안하기
+                                </button>
+                                <button
+                                    onClick={() => window.location.href = '/bank'}
+                                    className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                >
+                                    <span>🏦</span> 은행 가기
+                                </button>
+                                <button
                                     onClick={() => window.location.href = '/square'}
-                                    className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-bold hover:bg-green-200 transition-colors flex items-center gap-1"
+                                    className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-bold hover:bg-green-200 transition-colors flex items-center gap-1"
                                 >
                                     <span>🌳</span> 광장 가기
                                 </button>
                                 <button
                                     onClick={handleLogout}
-                                    className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors"
+                                    className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors"
                                 >
                                     로그아웃
                                 </button>
@@ -704,7 +770,12 @@ export default function StudentShop() {
                                         <p className="text-sm mt-2">상점에서 멋진 아이템을 구매해보세요!</p>
                                     </div>
                                 ) : (
-                                    filteredInventory.map((item) => (
+                                    filteredInventory.map((item) => {
+                                        const isThisItemEquipped = item.category === 'accessory' 
+                                            ? ['accessory', 'accessory_0', 'accessory_1', 'accessory_2'].some(k => equippedItems[k]?.id === item.id) 
+                                            : equippedItems[item.category || '']?.id === item.id;
+
+                                        return (
                                         <div key={item.id} className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
                                             <div className="aspect-square bg-gray-50 rounded-lg mb-4 overflow-hidden relative">
                                                 {item.imageUrl ? (
@@ -723,12 +794,12 @@ export default function StudentShop() {
                                                 {item.category && item.category !== 'others' ? (
                                                     <button
                                                         onClick={() => handleEquip(item)}
-                                                        className={`w-full py-2 rounded-lg font-bold text-sm transition-colors ${equippedItems[item.category]?.id === item.id
+                                                        className={`w-full py-2 rounded-lg font-bold text-sm transition-colors ${isThisItemEquipped
                                                             ? 'bg-red-100 text-red-600 hover:bg-red-200'
                                                             : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
                                                             }`}
                                                     >
-                                                        {equippedItems[item.category]?.id === item.id ? '장착 해제' : '장착하기'}
+                                                        {isThisItemEquipped ? '장착 해제' : '장착하기'}
                                                     </button>
                                                 ) : (
                                                     <button className="w-full py-2 bg-gray-100 text-gray-400 rounded-lg font-bold text-sm cursor-not-allowed">
@@ -737,13 +808,190 @@ export default function StudentShop() {
                                                 )}
                                             </div>
                                         </div>
-                                    ))
+                                    )})
                                 )}
                             </div>
                         )}
                     </div>
                 </div>
             </div>
+
+            {/* Hover Tooltip */}
+            {activeTab === 'shop' && hoveredItem && (
+                <div
+                    className="fixed pointer-events-none z-50 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 flex flex-col items-center animate-fade-in"
+                    style={{
+                        left: mousePos.x + 20,
+                        top: mousePos.y + 20,
+                        width: '200px'
+                    }}
+                >
+                    <h4 className="font-bold text-gray-800 mb-2">{hoveredItem.name}</h4>
+                    <AvatarDisplay
+                        equippedItems={{
+                            ...equippedItems,
+                            [hoveredItem.category || 'accessory']: hoveredItem
+                        }}
+                        size={150}
+                    />
+                    <p className="text-xs text-gray-500 mt-3 text-center">
+                        미리보는 중입니다
+                    </p>
+                </div>
+            )}
+
+            {/* Suggest Modal */}
+            {isSuggestModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col md:flex-row">
+                        {/* Form Area */}
+                        <div className="flex-1 p-6 border-b md:border-b-0 md:border-r border-gray-200">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                    <span>💡</span> 아이템 제안하기
+                                </h3>
+                                <button onClick={() => setIsSuggestModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold md:hidden">
+                                    &times;
+                                </button>
+                            </div>
+                            <form onSubmit={handleSuggestSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">아이템 이름</label>
+                                    <input
+                                        type="text"
+                                        value={suggestItemData.name}
+                                        onChange={(e) => setSuggestItemData({ ...suggestItemData, name: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none"
+                                        placeholder="예: 멋진 선글라스"
+                                        required
+                                        maxLength={20}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+                                    <select
+                                        value={suggestItemData.category || 'accessory'}
+                                        onChange={(e) => setSuggestItemData({ ...suggestItemData, category: e.target.value as any })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none"
+                                    >
+                                        <option value="background">배경 (Background)</option>
+                                        <option value="cookie">쿠키맛 (Cookie Flavor)</option>
+                                        <option value="face">얼굴 (Face)</option>
+                                        <option value="hair">헤어 (Hair)</option>
+                                        <option value="outfit">의상 (Outfit)</option>
+                                        <option value="accessory">액세서리 (Accessory)</option>
+                                    </select>
+                                </div>
+
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                    <h3 className="text-sm font-bold text-gray-700 mb-3">📍 아이템 위치/크기 조정</h3>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">X 위치 (%)</label>
+                                            <input
+                                                type="number"
+                                                value={suggestItemData.style?.x || 0}
+                                                onChange={(e) => setSuggestItemData({ ...suggestItemData, style: { ...suggestItemData.style!, x: Number(e.target.value) } })}
+                                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-yellow-400"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Y 위치 (%)</label>
+                                            <input
+                                                type="number"
+                                                value={suggestItemData.style?.y || 0}
+                                                onChange={(e) => setSuggestItemData({ ...suggestItemData, style: { ...suggestItemData.style!, y: Number(e.target.value) } })}
+                                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-yellow-400"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">크기 (%)</label>
+                                            <input
+                                                type="number"
+                                                value={suggestItemData.style?.width || 100}
+                                                onChange={(e) => setSuggestItemData({ ...suggestItemData, style: { ...suggestItemData.style!, width: Number(e.target.value) } })}
+                                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:border-yellow-400"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">아이템 이미지 첨부</label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                            const file = e.target.files ? e.target.files[0] : null;
+                                            setSuggestImageFile(file);
+                                            if (file) {
+                                                const objectUrl = URL.createObjectURL(file);
+                                                const fileNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name;
+                                                setSuggestItemData(prev => ({ 
+                                                    ...prev, 
+                                                    imageUrl: objectUrl,
+                                                    name: prev.name || fileNameWithoutExt 
+                                                }));
+                                            }
+                                        }}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-sm"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">제안 이유 / 상세 설명</label>
+                                    <textarea
+                                        value={suggestItemReason}
+                                        onChange={(e) => setSuggestItemReason(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none resize-none h-24"
+                                        placeholder="이 아이템이 필요한 이유나 설명을 적어주세요!"
+                                    />
+                                </div>
+
+                                <div className="flex gap-2 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsSuggestModalOpen(false)}
+                                        className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-lg font-bold hover:bg-gray-200 transition-colors"
+                                    >
+                                        취소
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmittingSuggestion}
+                                        className={`flex-1 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold shadow-md transition-colors ${isSubmittingSuggestion ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {isSubmittingSuggestion ? '제안 중...' : '아이템 제안하기'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* Preview Area */}
+                        <div className="w-full md:w-80 p-6 flex flex-col items-center bg-gray-50 relative">
+                            <button onClick={() => setIsSuggestModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 font-bold hidden md:block">
+                                &times;
+                            </button>
+                            <h3 className="text-lg font-bold text-gray-800 mb-4">내 아바타 착용 미리보기</h3>
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 w-full flex justify-center">
+                                <AvatarDisplay
+                                    equippedItems={
+                                        suggestItemData.category && suggestItemData.category !== 'others' 
+                                            ? { [suggestItemData.category]: suggestItemData as ShopItem } 
+                                            : {}
+                                    }
+                                    size={200}
+                                />
+                            </div>
+                            <p className="text-xs text-gray-500 mt-4 text-center">
+                                등록 전 아이템 위치와 크기가<br/>잘 맞는지 확인해주세요!
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

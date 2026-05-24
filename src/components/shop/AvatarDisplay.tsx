@@ -108,7 +108,7 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
                 />
             )}
 
-            {/* Accessory */}
+            {/* Accessory (Legacy) */}
             {equippedItems.accessory && equippedItems.accessory.imageUrl && (
                 <img
                     src={getProxyImageUrl(equippedItems.accessory.imageUrl)}
@@ -122,6 +122,28 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
                     }}
                 />
             )}
+
+            {/* Multiple Accessories */}
+            {[0, 1, 2].map(i => {
+                const acc = equippedItems[`accessory_${i}`];
+                if (acc && acc.imageUrl) {
+                    return (
+                        <img
+                            key={`accessory_${i}`}
+                            src={getProxyImageUrl(acc.imageUrl)}
+                            alt={`Accessory ${i + 1}`}
+                            className="absolute object-contain"
+                            style={{
+                                zIndex: 41 + i,
+                                left: `${acc.style?.x || 0}%`,
+                                top: `${acc.style?.y || 0}%`,
+                                width: `${acc.style?.width || 100}%`,
+                            }}
+                        />
+                    );
+                }
+                return null;
+            })}
         </div>
     );
 }

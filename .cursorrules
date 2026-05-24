@@ -66,16 +66,19 @@ schools/
             └── classes/
                 └── {classId}/
                     ├── shopItems/              # Class-specific shop items
+                    ├── itemSuggestions/        # Student suggested items waiting for teacher approval
                     ├── chat/                   # Square real-time chat logs
                     ├── teacherMessages/        # Private letters sent to the teacher
                     ├── thermometers/           # Custom thermometer donation goals (includes contributors map)
                     ├── square_online/          # Real-time presences in Square
                     ├── settings/
-                    │   └── shop/               # Configs (e.g., square background)
+                    │   ├── shop/               # Configs (e.g., square background)
+                    │   └── bank/               # Bank settings (interest rates for 7, 14, 28 days)
                     └── students/               # Class roster
                         └── {studentCode}/      # Student stats, cookies, equipped items
                             ├── inventory/      # Student's purchased items
-                            └── cookielog/      # Transaction history of cookies
+                            ├── cookielog/      # Transaction history of cookies
+                            └── bankDeposits/   # Student's bank deposits (principal, rate, term, endDate)
 
 teachers/
 └── {teacherId} (stores teacher info/metadata)
