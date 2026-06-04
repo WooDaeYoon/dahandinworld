@@ -870,8 +870,8 @@ export default function AdminShop() {
                                                         {new Date(log.createdAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                     </p>
                                                 </div>
-                                                <div className={`font-black ${log.type === 'reward' ? 'text-indigo-600' : 'text-orange-500'}`}>
-                                                    {log.type === 'reward' ? '+' : '-'}{log.amount}
+                                                <div className={`font-black ${['reward', 'deposit_claim'].includes(log.type) ? 'text-indigo-600' : 'text-orange-500'}`}>
+                                                    {['reward', 'deposit_claim'].includes(log.type) ? '+' : '-'}{log.amount}
                                                 </div>
                                             </div>
                                         ))
