@@ -298,7 +298,7 @@ export default function StudentShop() {
                 });
             } else {
                 // Equip
-                let targetSlotKey = item.category;
+                let targetSlotKey: string = item.category;
                 if (item.category === 'accessory') {
                     targetSlotKey = null as any;
                     for (let i = 0; i < 3; i++) {

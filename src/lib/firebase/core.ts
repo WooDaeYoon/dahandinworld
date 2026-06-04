@@ -101,19 +101,19 @@ const resolveClassPath = (classCode: string) => {
         // But wait, the existing code constructs path like `${CLASSES_COLLECTION}/${classCode}/...`
         // So if classCode is "CODE", we get "classes/CODE/...".
         // If classCode is "schools/A/teachers/B/classes/C", we get "classes/schools/A/..." -> WRONG.
-        return `${CLASSES_COLLECTION}/${classCode}`;
+        return `classes/${classCode}`;
     }
-    return `${CLASSES_COLLECTION}/${classCode}`;
+    return `classes/${classCode}`;
 };
 // Correction: The logic above is slightly flawed.
-// Usage in code: `${CLASSES_COLLECTION}/${classCode}/shopItems`
+// Usage in code: `classes/${classCode}/shopItems`
 // Desired: `${resolvedPath}/shopItems`
 // If classCode has slashes, resolvedPath = classCode.
 // If classCode has no slashes, resolvedPath = `classes/${classCode}`.
 
 const getResolvedPath = (classCode: string) => {
     if (classCode === 'GLOBAL') return 'admin/global';
-    return classCode.includes('/') ? classCode : `${CLASSES_COLLECTION}/${classCode}`;
+    return classCode.includes('/') ? classCode : `classes/${classCode}`;
 }
 
 export const firebaseService = {

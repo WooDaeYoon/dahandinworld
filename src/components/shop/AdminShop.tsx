@@ -32,7 +32,7 @@ export default function AdminShop() {
     const [className, setClassName] = useState<string | null>(null);
 
     const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'cookie' | 'others' | 'consumable'>('all');
-    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages' | 'suggestions'>('shop');
+    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages' | 'suggestions' | 'bank'>('shop');
     const [selectedThermometerForDetails, setSelectedThermometerForDetails] = useState<Thermometer | null>(null);
     const [students, setStudents] = useState<any[]>([]);
     const [itemType, setItemType] = useState<'permanent' | 'consumable'>('permanent');
