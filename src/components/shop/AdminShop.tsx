@@ -104,7 +104,37 @@ export default function AdminShop() {
     const fetchStudents = async (code: string) => {
         try {
             const fetchedStudents = await firebaseService.getClassStudents(code);
-            setStudents(fetchedStudents);
+            const apiKey = localStorage.getItem('apiKey');
+            let dahandinMap: Record<string, number> = {};
+
+            if (apiKey) {
+                try {
+                    const res = await dahandinClient.getStudentList(apiKey);
+                    if (res.result && res.data) {
+                        res.data.forEach((s: { code: string; totalCookie?: number }) => {
+                            dahandinMap[s.code] = s.totalCookie || 0;
+                        });
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch dahandin student list for cookies", e);
+                }
+            }
+
+            const studentsWithCookies = await Promise.all(fetchedStudents.map(async (student) => {
+                let realCookies = null;
+                try {
+                    if (student.studentCode && dahandinMap[student.studentCode] !== undefined) {
+                        const baseCookies = dahandinMap[student.studentCode];
+                        const usedCookies = await firebaseService.getUsedCookies(code, student.id);
+                        realCookies = baseCookies - usedCookies;
+                    }
+                } catch (e) {
+                    console.error("Error computing cookies for student", student.id, e);
+                }
+                return { ...student, realCookies };
+            }));
+
+            setStudents(studentsWithCookies);
         } catch (error) {
             console.error("Failed to fetch students:", error);
         }
@@ -486,6 +516,9 @@ export default function AdminShop() {
                 { type: 'body', url: '/assets/avatar/base_body.png', style: null },
                 { type: 'cookie', url: eq.cookie?.imageUrl, style: eq.cookie?.style },
                 { type: 'face', url: eq.face?.imageUrl, style: eq.face?.style },
+                { type: 'face_0', url: eq.face_0?.imageUrl, style: eq.face_0?.style },
+                { type: 'face_1', url: eq.face_1?.imageUrl, style: eq.face_1?.style },
+                { type: 'face_2', url: eq.face_2?.imageUrl, style: eq.face_2?.style },
                 { type: 'hair', url: eq.hair?.imageUrl, style: eq.hair?.style },
                 { type: 'outfit', url: eq.outfit?.imageUrl, style: eq.outfit?.style },
                 { type: 'accessory', url: eq.accessory?.imageUrl, style: eq.accessory?.style },
@@ -765,10 +798,12 @@ export default function AdminShop() {
                                     <span>👕</span> 착용 중인 아이템
                                 </h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                    {['background', 'hair', 'face', 'outfit', 'accessory', 'accessory_0', 'accessory_1', 'accessory_2', 'cookie'].map(category => {
+                                    {['background', 'hair', 'face', 'face_0', 'face_1', 'face_2', 'outfit', 'accessory', 'accessory_0', 'accessory_1', 'accessory_2', 'cookie'].map(category => {
                                         const item = selectedStudent.equippedItems?.[category];
                                         if (category.startsWith('accessory_') && !item) return null;
                                         if (category === 'accessory' && !item && ['accessory_0', 'accessory_1', 'accessory_2'].some(k => selectedStudent.equippedItems?.[k])) return null;
+                                        if (category.startsWith('face_') && !item) return null;
+                                        if (category === 'face' && !item && ['face_0', 'face_1', 'face_2'].some(k => selectedStudent.equippedItems?.[k])) return null;
                                         return (
                                             <div key={category} className="border border-gray-100 rounded-lg p-2 flex flex-col items-center bg-gray-50 shadow-sm text-center transition-colors hover:border-indigo-200">
                                                 <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center overflow-hidden mb-2 border border-gray-100 shrink-0">
@@ -781,7 +816,7 @@ export default function AdminShop() {
                                                 <div className="text-[10px] font-bold text-gray-400 mb-0.5">{
                                                     category === 'background' ? '배경' :
                                                     category === 'hair' ? '헤어' :
-                                                    category === 'face' ? '얼굴' :
+                                                    category.startsWith('face') ? '얼굴' :
                                                     category === 'outfit' ? '의상' :
                                                     category.startsWith('accessory') ? '액세서리' : '쿠키맛'
                                                 }</div>
@@ -1428,6 +1463,9 @@ export default function AdminShop() {
                                         {student.studentCode && (
                                             <span className="text-xs text-gray-400 mt-1">학번: {student.studentCode}</span>
                                         )}
+                                        {student.realCookies !== undefined && student.realCookies !== null && (
+                                            <span className="text-xs font-bold text-orange-500 mt-1">🍪 {student.realCookies}</span>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -2068,9 +2106,11 @@ export default function AdminShop() {
                                             </span>
                                         </div>
 
-                                        <div className="aspect-square bg-white rounded-lg mb-3 overflow-hidden border border-gray-100 flex items-center justify-center p-2 relative">
+                                        <div className="aspect-square bg-white rounded-lg mb-3 overflow-hidden border border-gray-100 flex items-center justify-center relative">
                                             {suggestion.item.imageUrl && (
-                                                <img src={getProxyImageUrl(suggestion.item.imageUrl)} alt={suggestion.item.name} className="max-w-full max-h-full object-contain" />
+                                                <div className="scale-75 origin-center">
+                                                    <AvatarDisplay equippedItems={{ [suggestion.item.category || 'accessory']: suggestion.item }} size={200} />
+                                                </div>
                                             )}
                                         </div>
 

@@ -280,6 +280,13 @@ export default function StudentShop() {
                         break;
                     }
                 }
+            } else if (item.category === 'face') {
+                for (const key of ['face', 'face_0', 'face_1', 'face_2']) {
+                    if (equippedItems[key]?.id === item.id) {
+                        equippedSlotKey = key;
+                        break;
+                    }
+                }
             } else {
                 if (equippedItems[item.category]?.id === item.id) {
                     equippedSlotKey = item.category;
@@ -309,7 +316,20 @@ export default function StudentShop() {
                         }
                     }
                     if (!targetSlotKey) {
-                        alert("악세사리는 최대 3개까지만 착용할 수 있습니다. 기존 악세사리를 해제해주세요.");
+                        alert("액세서리는 최대 3개까지만 착용할 수 있습니다. 기존 액세서리를 해제해주세요.");
+                        return;
+                    }
+                } else if (item.category === 'face') {
+                    targetSlotKey = null as any;
+                    for (let i = 0; i < 3; i++) {
+                        const slotKey = `face_${i}`;
+                        if (!equippedItems[slotKey]) {
+                            targetSlotKey = slotKey;
+                            break;
+                        }
+                    }
+                    if (!targetSlotKey) {
+                        alert("얼굴 아이템은 최대 3개까지만 착용할 수 있습니다. 기존 얼굴 아이템을 해제해주세요.");
                         return;
                     }
                 }
@@ -344,6 +364,9 @@ export default function StudentShop() {
                 { type: 'body', url: '/assets/avatar/base_body.png', style: null },
                 { type: 'cookie', url: eq.cookie?.imageUrl, style: eq.cookie?.style },
                 { type: 'face', url: eq.face?.imageUrl, style: eq.face?.style },
+                { type: 'face_0', url: eq.face_0?.imageUrl, style: eq.face_0?.style },
+                { type: 'face_1', url: eq.face_1?.imageUrl, style: eq.face_1?.style },
+                { type: 'face_2', url: eq.face_2?.imageUrl, style: eq.face_2?.style },
                 { type: 'hair', url: eq.hair?.imageUrl, style: eq.hair?.style },
                 { type: 'outfit', url: eq.outfit?.imageUrl, style: eq.outfit?.style },
                 { type: 'accessory', url: eq.accessory?.imageUrl, style: eq.accessory?.style },
@@ -773,6 +796,8 @@ export default function StudentShop() {
                                     filteredInventory.map((item) => {
                                         const isThisItemEquipped = item.category === 'accessory' 
                                             ? ['accessory', 'accessory_0', 'accessory_1', 'accessory_2'].some(k => equippedItems[k]?.id === item.id) 
+                                            : item.category === 'face'
+                                            ? ['face', 'face_0', 'face_1', 'face_2'].some(k => equippedItems[k]?.id === item.id)
                                             : equippedItems[item.category || '']?.id === item.id;
 
                                         return (

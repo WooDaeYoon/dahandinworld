@@ -78,6 +78,28 @@ export default function AvatarDisplay({ equippedItems, size = 200 }: AvatarDispl
                 />
             )}
 
+            {/* Multiple Faces */}
+            {[0, 1, 2].map(i => {
+                const face = equippedItems[`face_${i}`];
+                if (face && face.imageUrl) {
+                    return (
+                        <img
+                            key={`face_${i}`}
+                            src={getProxyImageUrl(face.imageUrl)}
+                            alt={`Face ${i + 1}`}
+                            className="absolute object-contain"
+                            style={{
+                                zIndex: 11 + i,
+                                left: `${face.style?.x || 0}%`,
+                                top: `${face.style?.y || 0}%`,
+                                width: `${face.style?.width || 100}%`,
+                            }}
+                        />
+                    );
+                }
+                return null;
+            })}
+
             {/* Hair */}
             {equippedItems.hair && equippedItems.hair.imageUrl && (
                 <img
