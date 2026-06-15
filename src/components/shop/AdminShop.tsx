@@ -105,28 +105,20 @@ export default function AdminShop() {
         try {
             const fetchedStudents = await firebaseService.getClassStudents(code);
             const apiKey = localStorage.getItem('apiKey');
-            let dahandinMap: Record<string, number> = {};
-
-            if (apiKey) {
-                try {
-                    const res = await dahandinClient.getStudentList(apiKey);
-                    if (res.result && res.data) {
-                        res.data.forEach((s: { code: string; totalCookie?: number }) => {
-                            dahandinMap[s.code] = s.totalCookie || 0;
-                        });
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch dahandin student list for cookies", e);
-                }
-            }
-
             const studentsWithCookies = await Promise.all(fetchedStudents.map(async (student) => {
                 let realCookies = null;
                 try {
-                    if (student.studentCode && dahandinMap[student.studentCode] !== undefined) {
-                        const baseCookies = dahandinMap[student.studentCode];
-                        const usedCookies = await firebaseService.getUsedCookies(code, student.id);
-                        realCookies = baseCookies - usedCookies;
+                    if (student.studentCode && apiKey) {
+                        try {
+                            const res = await dahandinClient.getStudentTotal(student.studentCode, apiKey);
+                            if (res.result && res.data) {
+                                const baseCookies = res.data.totalCookie || 0;
+                                const usedCookies = await firebaseService.getUsedCookies(code, student.id);
+                                realCookies = baseCookies - usedCookies;
+                            }
+                        } catch (e) {
+                            console.error("Failed to fetch dahandin student total", e);
+                        }
                     }
                 } catch (e) {
                     console.error("Error computing cookies for student", student.id, e);
