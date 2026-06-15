@@ -1460,11 +1460,8 @@ export default function AdminShop() {
                                             <AvatarDisplay equippedItems={student.equippedItems || {}} size={120} />
                                         </div>
                                         <span className="font-bold text-gray-700 text-lg group-hover:text-indigo-600 transition-colors">{student.name || '이름 없음'}</span>
-                                        {student.studentCode && (
-                                            <span className="text-xs text-gray-400 mt-1">학번: {student.studentCode}</span>
-                                        )}
                                         {student.realCookies !== undefined && student.realCookies !== null && (
-                                            <span className="text-xs font-bold text-orange-500 mt-1">🍪 {student.realCookies}</span>
+                                            <span className="text-xs font-bold text-gray-500 mt-1">잔여 쿠키: <span className="text-orange-500">{student.realCookies}</span>개</span>
                                         )}
                                     </div>
                                 ))}
