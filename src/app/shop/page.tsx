@@ -6,11 +6,21 @@ import StudentShop from '@/components/shop/StudentShop';
 
 export default function ShopPage() {
     const [role, setRole] = useState<'teacher' | 'student' | 'admin' | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const storedRole = localStorage.getItem('userRole') as 'teacher' | 'student' | 'admin' | null;
         setRole(storedRole);
+        setIsLoading(false);
     }, []);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-xl font-bold text-gray-500">로그인 정보 확인 중...</div>
+            </div>
+        );
+    }
 
     if (!role) {
         return (

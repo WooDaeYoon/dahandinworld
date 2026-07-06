@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { firebaseService, SquareParticipant, ChatMessage, ShopItem } from '@/lib/firebase/core';
 import AvatarDisplay from '../shop/AvatarDisplay';
 import { getProxyImageUrl } from '@/lib/utils';
+import { dahandinClient } from '@/lib/dahandin/client';
 
 export default function SquareSystem() {
     const router = useRouter();
@@ -206,9 +207,26 @@ export default function SquareSystem() {
 
     const joinSquare = async (cCode: string, sCode: string, sName: string) => {
         try {
+            const storedApiKey = localStorage.getItem('apiKey');
+            let level = 1;
+
+            if (storedApiKey) {
+                const response = await dahandinClient.getStudentTotal(sCode, storedApiKey);
+                if (response.result && response.data) {
+                    level = Math.floor(response.data.cookie / 10);
+                    localStorage.setItem('studentTotalCookie', response.data.cookie.toString());
+                } else {
+                    const storedTotalCookie = localStorage.getItem('studentTotalCookie');
+                    level = storedTotalCookie ? Math.floor(Number(storedTotalCookie) / 10) : 1;
+                }
+            } else {
+                const storedTotalCookie = localStorage.getItem('studentTotalCookie');
+                level = storedTotalCookie ? Math.floor(Number(storedTotalCookie) / 10) : 1;
+            }
+
             // Fetch equipped items first
             const equipped = await firebaseService.getEquippedItems(cCode, sCode);
-            await firebaseService.enterSquare(cCode, sCode, sName, equipped);
+            await firebaseService.enterSquare(cCode, sCode, sName, equipped, level);
         } catch (error) {
             console.error("Failed to enter square:", error);
         }
@@ -254,7 +272,9 @@ export default function SquareSystem() {
         if (classCode && studentCode) {
             await firebaseService.leaveSquare(classCode, studentCode);
         }
+        const cache = localStorage.getItem('studentLoginCache');
         localStorage.clear();
+        if (cache) localStorage.setItem('studentLoginCache', cache);
         window.location.href = '/login';
     };
 
@@ -320,6 +340,10 @@ export default function SquareSystem() {
                                     className="relative transform transition-transform hover:scale-110 duration-300 drop-shadow-xl cursor-pointer"
                                     onClick={() => setSelectedParticipant(user)}
                                 >
+                                    {/* Level Indicator */}
+                                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-rose-400 text-white text-[11px] font-black px-2 py-0.5 rounded-full z-10 shadow-sm border border-rose-400">
+                                        Lv.{user.level || 1}
+                                    </div>
                                     <AvatarDisplay
                                         equippedItems={user.avatarConfig || {}}
                                         size={140}
@@ -481,7 +505,10 @@ export default function SquareSystem() {
                             <div className="mx-auto w-32 h-32 mt-2 mb-4 bg-white rounded-full shadow-inner border border-green-100 flex items-center justify-center relative overflow-hidden">
                                 <AvatarDisplay equippedItems={selectedParticipant.avatarConfig || {}} size={120} />
                             </div>
-                            <h3 className="text-xl font-black text-gray-800">{selectedParticipant.name}</h3>
+                            <h3 className="text-xl font-black text-gray-800">
+                                <span className="text-rose-400 text-sm mr-2 align-middle font-bold">Lv.{selectedParticipant.level || 1}</span>
+                                {selectedParticipant.name}
+                            </h3>
                             <p className="text-sm text-gray-500 font-medium mt-1">
                                 {selectedParticipant.studentCode === studentCode ? '내 아바타' : '친구 아바타'}
                             </p>

@@ -57,7 +57,9 @@ export default function StudentShop() {
         name: '',
         category: 'accessory',
         style: { x: 0, y: 0, width: 100 },
-        imageUrl: ''
+        imageUrl: '',
+        price: 0,
+        requiredLevel: 1
     });
     const [suggestImageFile, setSuggestImageFile] = useState<File | null>(null);
     const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
@@ -110,6 +112,7 @@ export default function StudentShop() {
                 setTotalAccumulatedCookies(response.data.cookie);
                 setBadges(response.data.badges || {});
                 localStorage.setItem('studentCookie', response.data.totalCookie.toString());
+                localStorage.setItem('studentTotalCookie', response.data.cookie.toString());
 
                 // Sync Name to Firestore
                 await firebaseService.syncStudentData(cCode, code, response.data.name);
@@ -187,8 +190,8 @@ export default function StudentShop() {
             const newItem: ShopItem = {
                 ...suggestItemData as ShopItem,
                 imageUrl: downloadUrl,
-                price: 0,
-                requiredLevel: 0,
+                price: suggestItemData.price || 0,
+                requiredLevel: suggestItemData.requiredLevel || 1,
                 requiredBadge: '',
                 isDonation: false,
                 useStock: false,
@@ -199,7 +202,7 @@ export default function StudentShop() {
             await firebaseService.submitItemSuggestion(classCode, studentCode, studentName, newItem, suggestItemReason);
             alert("아이템 제안이 완료되었습니다! 선생님의 승인을 기다려주세요.");
             setIsSuggestModalOpen(false);
-            setSuggestItemData({ name: '', category: 'accessory', style: { x: 0, y: 0, width: 100 }, imageUrl: '' });
+            setSuggestItemData({ name: '', category: 'accessory', style: { x: 0, y: 0, width: 100 }, imageUrl: '', price: 0, requiredLevel: 1 });
             setSuggestImageFile(null);
             setSuggestItemReason('');
         } catch (error) {
@@ -907,6 +910,29 @@ export default function StudentShop() {
                                         <option value="outfit">의상 (Outfit)</option>
                                         <option value="accessory">액세서리 (Accessory)</option>
                                     </select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">희망 가격 (쿠키)</label>
+                                        <input
+                                            type="number"
+                                            value={suggestItemData.price || 0}
+                                            onChange={(e) => setSuggestItemData({ ...suggestItemData, price: Number(e.target.value) })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none"
+                                            min="0"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">구매 가능 레벨</label>
+                                        <input
+                                            type="number"
+                                            value={suggestItemData.requiredLevel || 1}
+                                            onChange={(e) => setSuggestItemData({ ...suggestItemData, requiredLevel: Number(e.target.value) })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none"
+                                            min="1"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">

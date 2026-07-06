@@ -24,6 +24,9 @@ export interface ShopItem {
     isConsumable?: boolean; // True if item is a consumable/coupon
     useStock?: boolean;
     stock?: number;
+    creatorName?: string;
+    salesCount?: number;
+    salesCookies?: number;
 }
 
 
@@ -49,6 +52,7 @@ export interface SquareParticipant {
     name: string;
     avatarConfig: Record<string, ShopItem>; // Equipped items
     lastActive: any;
+    level?: number;
 }
 
 export interface TeacherMessage {
@@ -441,8 +445,22 @@ export const firebaseService = {
                     const newStock = currentStock - 1;
                     await updateDoc(shopItemRef, { 
                         stock: newStock,
-                        isHidden: newStock === 0 ? true : (shopDoc.data().isHidden || false)
+                        isHidden: newStock === 0 ? true : (shopDoc.data().isHidden || false),
+                        salesCount: increment(1),
+                        salesCookies: increment(item.price)
                     });
+                }
+            } else {
+                // Update sales stats even if useStock is false
+                const shopItemRef = doc(db, `${item.isGlobal ? 'admin/global' : getResolvedPath(classCode)}/shopItems`, item.id);
+                try {
+                    await updateDoc(shopItemRef, {
+                        salesCount: increment(1),
+                        salesCookies: increment(item.price)
+                    });
+                } catch (e) {
+                    // Item might be global and user doesn't have permission, ignore
+                    console.warn("Could not update sales stats (might be global item)", e);
                 }
             }
 
@@ -813,7 +831,7 @@ export const firebaseService = {
     },
 
     // Enter Square (Update Presence)
-    enterSquare: async (classCode: string, studentCode: string, name: string, avatarConfig: any) => {
+    enterSquare: async (classCode: string, studentCode: string, name: string, avatarConfig: any, level: number = 1) => {
         if (!classCode) return;
         // Path: {resolved}/square_online/{studentCode}
         const onlineRef = doc(db, `${getResolvedPath(classCode)}/square_online/${studentCode}`);
@@ -821,6 +839,7 @@ export const firebaseService = {
             studentCode,
             name,
             avatarConfig,
+            level,
             lastActive: serverTimestamp()
         });
     },

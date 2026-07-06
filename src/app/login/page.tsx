@@ -16,6 +16,7 @@ export default function LoginPage() {
     const [studentTeacherId, setStudentTeacherId] = useState('');
     const [isStudentAgreed, setIsStudentAgreed] = useState(false);
     const [cachedStudents, setCachedStudents] = useState<any[]>([]);
+    const [cachedTeachers, setCachedTeachers] = useState<any[]>([]);
 
     // --- TEACHER STATE ---
     const [apiKey, setApiKey] = useState('');
@@ -36,10 +37,26 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
+        const role = localStorage.getItem('userRole');
+        if (role === 'admin' || role === 'teacher') {
+            window.location.href = '/shop';
+            return;
+        } else if (role === 'student') {
+            window.location.href = '/square';
+            return;
+        }
+
         const cacheStr = localStorage.getItem('studentLoginCache');
         if (cacheStr) {
             try {
                 setCachedStudents(JSON.parse(cacheStr));
+            } catch (e) {}
+        }
+
+        const tCacheStr = localStorage.getItem('teacherLoginCache');
+        if (tCacheStr) {
+            try {
+                setCachedTeachers(JSON.parse(tCacheStr));
             } catch (e) {}
         }
         
@@ -47,6 +64,9 @@ export default function LoginPage() {
         
         if (cacheStr) {
             localStorage.setItem('studentLoginCache', cacheStr);
+        }
+        if (tCacheStr) {
+            localStorage.setItem('teacherLoginCache', tCacheStr);
         }
     }, []);
 
@@ -137,6 +157,21 @@ export default function LoginPage() {
                 localStorage.setItem('className', teacherData.className);
                 localStorage.setItem('teacherId', loginTeacherId);
 
+                // Add to teacher cache
+                const tCacheStr = localStorage.getItem('teacherLoginCache');
+                let tCache = [];
+                if (tCacheStr) {
+                    try { tCache = JSON.parse(tCacheStr); } catch(e) {}
+                }
+                const newTCache = tCache.filter((c: any) => c.teacherId !== loginTeacherId);
+                newTCache.unshift({
+                    teacherId: loginTeacherId,
+                    className: teacherData.className,
+                    classCode: teacherData.classCode,
+                    apiKey: teacherData.apiKey
+                });
+                localStorage.setItem('teacherLoginCache', JSON.stringify(newTCache.slice(0, 3))); // keep top 3
+                
                 window.location.href = '/shop';
             } else {
                 alert("등록되지 않은 선생님 ID입니다.\n먼저 회원가입을 진행해주세요.");
@@ -208,7 +243,7 @@ export default function LoginPage() {
             } else {
                 alert("등록되지 않은 선생님 아이디입니다. 아이디를 다시 확인해주세요.");
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
             alert("선생님 정보 확인 중 오류가 발생했습니다.");
         } finally {
@@ -276,6 +311,26 @@ export default function LoginPage() {
             localStorage.removeItem('studentLoginCache');
         }
     };
+    const handleTeacherCacheLogin = (cache: any) => {
+        localStorage.setItem('apiKey', cache.apiKey);
+        localStorage.setItem('userRole', 'teacher');
+        localStorage.setItem('classCode', cache.classCode);
+        localStorage.setItem('className', cache.className);
+        localStorage.setItem('teacherId', cache.teacherId);
+
+        // Update cache order
+        const currentCacheStr = localStorage.getItem('teacherLoginCache');
+        if (currentCacheStr) {
+            try {
+                const currentCache = JSON.parse(currentCacheStr);
+                const filtered = currentCache.filter((c: any) => c.teacherId !== cache.teacherId);
+                filtered.unshift(cache);
+                localStorage.setItem('teacherLoginCache', JSON.stringify(filtered));
+            } catch(e) {}
+        }
+        window.location.href = '/shop';
+    };
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-black p-4 relative overflow-hidden">
             {/* Video Background */}
@@ -405,6 +460,39 @@ export default function LoginPage() {
                                 <p className="text-xs text-red-500 mt-2 font-bold">※ 학생들의 무단 접속 방지를 위해 API Key 인증이 필요합니다.</p>
                                 <p className="text-xs text-gray-500 mt-1">💡 API Key는 다했니 오른쪽 상단 <span className="font-bold text-gray-700">[내정보] - [다했니 API 센터]</span>에서 발급이 가능합니다.</p>
                             </div>
+
+                            {cachedTeachers.length > 0 && (
+                                <div className="mb-2 bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                                    <label className="block text-sm font-bold text-emerald-800 mb-2">최근 관리자 접속 (클릭 시 자동 입장)</label>
+                                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                                        {cachedTeachers.map((cache, idx) => (
+                                            <div key={idx} className="shrink-0 flex items-center bg-white border border-emerald-200 rounded-lg overflow-hidden shadow-sm hover:border-emerald-300 transition-colors group">
+                                                <button 
+                                                    onClick={() => handleTeacherCacheLogin(cache)}
+                                                    className="px-3 py-2 text-emerald-700 font-bold hover:bg-emerald-50 transition-colors text-sm"
+                                                >
+                                                    {cache.teacherId} ({cache.className})
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const newCache = cachedTeachers.filter(c => c.teacherId !== cache.teacherId);
+                                                        setCachedTeachers(newCache);
+                                                        if (newCache.length > 0) {
+                                                            localStorage.setItem('teacherLoginCache', JSON.stringify(newCache));
+                                                        } else {
+                                                            localStorage.removeItem('teacherLoginCache');
+                                                        }
+                                                    }}
+                                                    className="px-2 py-2 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors border-l border-emerald-100"
+                                                    title="기록 삭제"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <button
                                 onClick={handleTeacherLogin}

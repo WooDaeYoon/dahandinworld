@@ -33,6 +33,7 @@ export default function AdminShop() {
 
     const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'cookie' | 'others' | 'consumable'>('all');
     const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages' | 'suggestions' | 'bank'>('shop');
+    const [shopTab, setShopTab] = useState<'items' | 'suggestions' | 'stats'>('items');
     const [selectedThermometerForDetails, setSelectedThermometerForDetails] = useState<Thermometer | null>(null);
     const [students, setStudents] = useState<any[]>([]);
     const [itemType, setItemType] = useState<'permanent' | 'consumable'>('permanent');
@@ -320,10 +321,10 @@ export default function AdminShop() {
     };
 
     useEffect(() => {
-        if (activeTab === 'suggestions') {
+        if (activeTab === 'shop' && shopTab === 'suggestions') {
             fetchItemSuggestions();
         }
-    }, [activeTab]);
+    }, [activeTab, shopTab]);
 
     const handleAddItem = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -663,8 +664,8 @@ export default function AdminShop() {
     const handleApproveSuggestion = (suggestion: ItemSuggestion) => {
         setApprovingSuggestion(suggestion);
         setApproveConfig({
-            price: 100, // Default price
-            requiredLevel: 1,
+            price: suggestion.item.price !== undefined ? suggestion.item.price : 100,
+            requiredLevel: suggestion.item.requiredLevel !== undefined ? suggestion.item.requiredLevel : 1,
             useStock: false,
             stock: 10,
             isDonation: false,
@@ -683,7 +684,10 @@ export default function AdminShop() {
                 useStock: approveConfig.useStock,
                 stock: approveConfig.stock,
                 isDonation: approveConfig.isDonation,
-                requiredBadge: approveConfig.requiredBadge
+                requiredBadge: approveConfig.requiredBadge,
+                creatorName: approvingSuggestion.studentName,
+                salesCount: 0,
+                salesCookies: 0
             };
             
             await firebaseService.approveItemSuggestion(classCode, approvingSuggestion.id!, newItem);
@@ -991,17 +995,7 @@ export default function AdminShop() {
                                 >
                                     🌡️ 학급온도 관리
                                 </button>
-                                <button
-                                    onClick={() => setActiveTab('suggestions')}
-                                    className={`px-4 py-2 rounded-full font-bold text-sm transition-colors flex items-center gap-2 ${activeTab === 'suggestions' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
-                                >
-                                    🎁 제안된 아이템
-                                    {itemSuggestions.length > 0 && (
-                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'suggestions' ? 'bg-white text-indigo-600' : 'bg-yellow-500 text-white'}`}>
-                                            {itemSuggestions.length}
-                                        </span>
-                                    )}
-                                </button>
+
                                 {classCode !== 'GLOBAL' && (
                                     <button
                                         onClick={() => setActiveTab('bank')}
@@ -1016,8 +1010,37 @@ export default function AdminShop() {
                 )}
 
                 {activeTab === 'shop' ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Item Form & Preview Section - Only allow adding if not global view or admin */}
+                    <div className="flex flex-col gap-6">
+                        {/* Shop Sub Tabs */}
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            <button
+                                onClick={() => setShopTab('items')}
+                                className={`px-4 py-2 rounded-full font-bold text-sm transition-colors flex items-center gap-2 ${shopTab === 'items' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                            >
+                                📦 아이템 관리
+                            </button>
+                            <button
+                                onClick={() => setShopTab('suggestions')}
+                                className={`px-4 py-2 rounded-full font-bold text-sm transition-colors flex items-center gap-2 ${shopTab === 'suggestions' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                            >
+                                💡 제안된 아이템 관리
+                                {itemSuggestions.length > 0 && (
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${shopTab === 'suggestions' ? 'bg-white text-indigo-600' : 'bg-yellow-500 text-white'}`}>
+                                        {itemSuggestions.length}
+                                    </span>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setShopTab('stats')}
+                                className={`px-4 py-2 rounded-full font-bold text-sm transition-colors flex items-center gap-2 ${shopTab === 'stats' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                            >
+                                📊 상점 통계
+                            </button>
+                        </div>
+
+                        {shopTab === 'items' ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Item Form & Preview Section - Only allow adding if not global view or admin */}
                         {/* Actually, everyone can add items. Admin adds to global, Teacher adds to local. */}
                         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                             {/* Left: Add Item Form */}
@@ -1422,7 +1445,219 @@ export default function AdminShop() {
                                     })}
                                 </div>
                             </div>
-                        </div>
+                            </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden">
+                                <h2 className="text-xl font-bold mb-4 text-gray-800">📊 상점 통계</h2>
+                                <p className="text-sm text-gray-500 mb-6">학생들이 상점에서 구매한 전체 내역을 판매량 순으로 보여줍니다.</p>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse min-w-[600px]">
+                                        <thead>
+                                            <tr className="bg-gray-50 border-y border-gray-200">
+                                                <th className="py-3 px-4 font-bold text-gray-600">아이템</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">제작자</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">가격</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">총 판매량</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">누적 판매액</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {[...items].sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0)).map(item => (
+                                                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                                    <td className="py-3 px-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200">
+                                                                {item.imageUrl ? (
+                                                                    <img src={getProxyImageUrl(item.imageUrl)} alt={item.name} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <span className="text-gray-400 text-xs">No img</span>
+                                                                )}
+                                                            </div>
+                                                            <span className="font-bold text-gray-800">{item.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-sm text-gray-600 font-medium">
+                                                        {item.creatorName ? (
+                                                            <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-xs font-bold">{item.creatorName}</span>
+                                                        ) : (
+                                                            <span className="text-gray-400">선생님</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-3 px-4 text-sm font-bold text-orange-500">
+                                                        {item.price} 쿠키
+                                                    </td>
+                                                    <td className="py-3 px-4 text-sm font-bold text-indigo-600">
+                                                        {item.salesCount || 0} 개
+                                                    </td>
+                                                    <td className="py-3 px-4 text-sm font-bold text-emerald-600">
+                                                        {item.salesCookies || 0} 쿠키
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {items.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={5} className="py-8 text-center text-gray-500">
+                                                        등록된 아이템이 없습니다.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {shopTab === 'suggestions' && (
+                            <div className="bg-white rounded-xl shadow-sm p-6 w-full">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold text-gray-800">🎁 학생들이 제안한 아이템</h2>
+                                    <button onClick={fetchItemSuggestions} className="text-sm px-3 py-1 bg-gray-100 rounded-md hover:bg-gray-200 text-gray-700 font-bold">
+                                        🔄 새로고침
+                                    </button>
+                                </div>
+
+                                {loadingSuggestions ? (
+                                    <div className="text-center py-10 text-gray-500">불러오는 중...</div>
+                                ) : itemSuggestions.length === 0 ? (
+                                    <div className="text-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                        <span className="text-4xl mb-4 block">💡</span>
+                                        <p className="text-lg font-bold text-gray-600">제안된 아이템이 없습니다.</p>
+                                        <p className="text-sm text-gray-400 mt-2">학생들이 아이템을 제안하면 여기에 표시됩니다.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {itemSuggestions.map(suggestion => (
+                                            <div key={suggestion.id} className="border border-yellow-200 rounded-xl p-4 bg-yellow-50 hover:shadow-md transition-shadow relative">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div>
+                                                        <h3 className="font-bold text-lg text-gray-800">{suggestion.item.name}</h3>
+                                                        <p className="text-xs text-gray-500">제안자: <span className="font-bold">{suggestion.studentName}</span></p>
+                                                        {(suggestion.item.price !== undefined || suggestion.item.requiredLevel !== undefined) && (
+                                                            <p className="text-xs text-indigo-600 mt-1 font-bold">
+                                                                희망 가격: 🍪 {suggestion.item.price ?? '미정'} | 구매 가능 레벨: Lv.{suggestion.item.requiredLevel ?? '미정'}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full font-bold">
+                                                        {suggestion.item.category}
+                                                    </span>
+                                                </div>
+
+                                                <div className="aspect-square bg-white rounded-lg mb-3 overflow-hidden border border-gray-100 flex items-center justify-center relative">
+                                                    {suggestion.item.imageUrl && (
+                                                        <div className="scale-75 origin-center">
+                                                            <AvatarDisplay equippedItems={{ [suggestion.item.category || 'accessory']: suggestion.item }} size={200} />
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="bg-white p-3 rounded-lg border border-yellow-100 mb-4 h-24 overflow-y-auto custom-scrollbar">
+                                                    <h4 className="text-xs font-bold text-gray-600 mb-1">📝 제안 이유</h4>
+                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{suggestion.reason || '이유 없음'}</p>
+                                                </div>
+
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => handleRejectSuggestion(suggestion.id!)}
+                                                        className="flex-1 py-2 bg-white text-red-500 border border-red-200 rounded-lg font-bold hover:bg-red-50 transition-colors"
+                                                    >
+                                                        거절
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleApproveSuggestion(suggestion)}
+                                                        className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors"
+                                                    >
+                                                        승인 (상점 추가)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Approval Configuration Modal */}
+                                {approvingSuggestion && (
+                                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                                            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                                <span>✨</span> 아이템 승인 설정
+                                            </h3>
+                                            
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className="block text-sm font-bold text-gray-700 mb-1">가격 (쿠키)</label>
+                                                    <input
+                                                        type="number"
+                                                        value={approveConfig.price}
+                                                        onChange={e => setApproveConfig({...approveConfig, price: Number(e.target.value)})}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-bold text-gray-700 mb-1">구매 가능 레벨</label>
+                                                    <input
+                                                        type="number"
+                                                        value={approveConfig.requiredLevel}
+                                                        onChange={e => setApproveConfig({...approveConfig, requiredLevel: Number(e.target.value)})}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none"
+                                                    />
+                                                </div>
+                                                <div className="flex gap-4">
+                                                    <label className="flex items-center gap-2">
+                                                        <input 
+                                                            type="checkbox"
+                                                            checked={approveConfig.useStock}
+                                                            onChange={e => setApproveConfig({...approveConfig, useStock: e.target.checked})}
+                                                            className="w-4 h-4 text-indigo-600 rounded"
+                                                        />
+                                                        <span className="text-sm font-bold text-gray-700">수량 제한</span>
+                                                    </label>
+                                                </div>
+                                                {approveConfig.useStock && (
+                                                    <div>
+                                                        <label className="block text-sm font-bold text-gray-700 mb-1">수량</label>
+                                                        <input
+                                                            type="number"
+                                                            value={approveConfig.stock}
+                                                            onChange={e => setApproveConfig({...approveConfig, stock: Number(e.target.value)})}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none"
+                                                        />
+                                                    </div>
+                                                )}
+                                                <div className="flex gap-4">
+                                                    <label className="flex items-center gap-2">
+                                                        <input 
+                                                            type="checkbox"
+                                                            checked={approveConfig.isDonation}
+                                                            onChange={e => setApproveConfig({...approveConfig, isDonation: e.target.checked})}
+                                                            className="w-4 h-4 text-indigo-600 rounded"
+                                                        />
+                                                        <span className="text-sm font-bold text-gray-700">기부용 아이템</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-6 flex justify-end gap-3">
+                                                <button
+                                                    onClick={() => setApprovingSuggestion(null)}
+                                                    className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg font-bold transition-colors"
+                                                >
+                                                    취소
+                                                </button>
+                                                <button
+                                                    onClick={handleConfirmApprove}
+                                                    disabled={loading}
+                                                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors"
+                                                >
+                                                    {loading ? '추가 중...' : '최종 승인'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 ) : activeTab === 'students' ? (
                     <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
@@ -1557,7 +1792,7 @@ export default function AdminShop() {
                                                         className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
                                                     />
                                                     <span className="text-sm">
-                                                        {student.name} <span className="text-xs text-gray-400">({student.studentCode})</span>
+                                                        {student.name} <span className="text-xs text-gray-400">({student.studentCode ? student.studentCode.substring(0, 2) + '***' + student.studentCode.substring(student.studentCode.length - 2) : ''})</span>
                                                     </span>
                                                 </label>
                                             ))}
@@ -1686,7 +1921,7 @@ export default function AdminShop() {
                                                         </div>
                                                         <div>
                                                             <h3 className="font-bold text-gray-800 text-lg">{student.name || '이름 없음'}</h3>
-                                                            {student.studentCode && <p className="text-xs text-gray-500">학번: {student.studentCode}</p>}
+                                                            {student.studentCode && <p className="text-xs text-gray-500">학번: {student.studentCode.substring(0, 2) + '***' + student.studentCode.substring(student.studentCode.length - 2)}</p>}
                                                         </div>
                                                     </div>
 
@@ -2089,6 +2324,11 @@ export default function AdminShop() {
                                             <div>
                                                 <h3 className="font-bold text-lg text-gray-800">{suggestion.item.name}</h3>
                                                 <p className="text-xs text-gray-500">제안자: <span className="font-bold">{suggestion.studentName}</span></p>
+                                                {(suggestion.item.price !== undefined || suggestion.item.requiredLevel !== undefined) && (
+                                                    <p className="text-xs text-indigo-600 mt-1 font-bold">
+                                                        희망 가격: 🍪 {suggestion.item.price ?? '미정'} | 구매 가능 레벨: Lv.{suggestion.item.requiredLevel ?? '미정'}
+                                                    </p>
+                                                )}
                                             </div>
                                             <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full font-bold">
                                                 {suggestion.item.category}
