@@ -1038,7 +1038,7 @@ export default function AdminShop() {
                             </button>
                         </div>
 
-                        {shopTab === 'items' ? (
+                        {shopTab === 'items' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 {/* Item Form & Preview Section - Only allow adding if not global view or admin */}
                         {/* Actually, everyone can add items. Admin adds to global, Teacher adds to local. */}
@@ -1447,7 +1447,9 @@ export default function AdminShop() {
                             </div>
                             </div>
                             </div>
-                        ) : (
+                        )}
+                        
+                        {shopTab === 'stats' && (
                             <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden">
                                 <h2 className="text-xl font-bold mb-4 text-gray-800">📊 상점 통계</h2>
                                 <p className="text-sm text-gray-500 mb-6">학생들이 상점에서 구매한 전체 내역을 판매량 순으로 보여줍니다.</p>
