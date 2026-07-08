@@ -22,6 +22,7 @@ export default function Bank() {
     const [activeTab, setActiveTab] = useState<'products' | 'my'>('products');
     const [amounts, setAmounts] = useState<{ [key: number]: number }>({ 7: 10, 14: 10, 28: 10 });
     const [loading, setLoading] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
     const [clerkMessage, setClerkMessage] = useState("어서오세요! 다했니월드 은행입니다.\n무엇을 도와드릴까요?");
 
     useEffect(() => {
@@ -87,6 +88,7 @@ export default function Bank() {
     };
 
     const handleBuyDeposit = async (term: 7 | 14 | 28) => {
+        if (isProcessing) return;
         const amount = amounts[term];
         if (currentCookies < amount) {
             alert(`쿠키가 부족합니다. (보유: ${currentCookies}개)`);
@@ -99,6 +101,7 @@ export default function Bank() {
         
         if (!confirm(`정말 ${amount}쿠키를 ${term}일 예금에 가입하시겠습니까?\n만기 시 ${rate}%의 이자가 붙어 ${totalReward}개의 쿠키를 돌려받습니다.`)) return;
 
+        setIsProcessing(true);
         try {
             await firebaseService.buyDeposit(classCode, studentCode, term, amount, rate);
             setClerkMessage(`감사합니다! ${term}일 예금 가입이 완료되었습니다.`);
@@ -113,10 +116,13 @@ export default function Bank() {
         } catch (error) {
             console.error(error);
             alert("예금 가입 중 오류가 발생했습니다.");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
     const handleClaimDeposit = async (deposit: BankDeposit) => {
+        if (isProcessing) return;
         const isMatured = new Date(deposit.endDate) <= new Date();
         if (!isMatured) {
             alert("아직 만기일이 되지 않았습니다.");
@@ -125,6 +131,7 @@ export default function Bank() {
 
         if (!confirm("예금이 만기되었습니다! 원금과 이자를 수령하시겠습니까?")) return;
 
+        setIsProcessing(true);
         try {
             await firebaseService.claimDeposit(classCode, studentCode, deposit.id!, deposit.principal, deposit.interestRate);
             
@@ -138,9 +145,11 @@ export default function Bank() {
             setUsedCookies(used);
             fetchDeposits(classCode, studentCode);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert("수령 중 오류가 발생했습니다.");
+            alert(error.message || "수령 중 오류가 발생했습니다.");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -274,9 +283,14 @@ export default function Bank() {
                                             <div className="w-full sm:w-auto mt-4 sm:mt-0">
                                                 <button
                                                     onClick={() => handleBuyDeposit(product.term as 7|14|28)}
-                                                    className="w-full sm:w-32 bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white font-black py-3 rounded-xl shadow-md transform hover:scale-105 transition-all"
+                                                    disabled={isProcessing}
+                                                    className={`w-full sm:w-32 py-3 rounded-xl font-black shadow-md transform transition-all ${
+                                                        isProcessing
+                                                        ? 'bg-gray-400 text-white cursor-not-allowed'
+                                                        : 'bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white hover:scale-105'
+                                                    }`}
                                                 >
-                                                    가입하기
+                                                    {isProcessing ? '처리중...' : '가입하기'}
                                                 </button>
                                             </div>
                                         </div>
@@ -327,14 +341,14 @@ export default function Bank() {
                                                         {!isCompleted && (
                                                             <button
                                                                 onClick={() => handleClaimDeposit(deposit)}
-                                                                disabled={!isMatured}
+                                                                disabled={!isMatured || isProcessing}
                                                                 className={`w-full sm:w-32 py-3 rounded-xl font-black transition-all shadow-sm ${
-                                                                    isMatured 
+                                                                    isMatured && !isProcessing
                                                                     ? 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white transform hover:scale-105 animate-bounce-slight' 
                                                                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                                                 }`}
                                                             >
-                                                                만기 수령
+                                                                {isProcessing ? '처리중...' : '만기 수령'}
                                                             </button>
                                                         )}
                                                     </div>

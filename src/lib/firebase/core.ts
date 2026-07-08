@@ -1,5 +1,5 @@
 import { db, storage } from './config';
-import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc, setDoc, increment, deleteField, onSnapshot, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDoc, setDoc, increment, deleteField, onSnapshot, query, orderBy, limit, serverTimestamp, where, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export interface ShopItem {
@@ -1130,22 +1130,32 @@ export const firebaseService = {
     claimDeposit: async (classCode: string, studentCode: string, depositId: string, principal: number, interestRate: number) => {
         try {
             const depositRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}/bankDeposits/${depositId}`);
-            await updateDoc(depositRef, { status: 'completed' });
-
-            const interest = Math.floor(principal * (interestRate / 100));
-            const totalReward = principal + interest;
-
             const studentRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}`);
-            // Grant cookies (decrement usedCookies)
-            await setDoc(studentRef, { usedCookies: increment(-totalReward) }, { merge: true });
+            const logRef = doc(collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/cookielog`));
 
-            const logRef = collection(db, `${getResolvedPath(classCode)}/students/${studentCode}/cookielog`);
-            await addDoc(logRef, {
-                amount: totalReward,
-                type: 'deposit_claim',
-                itemId: 'bank_deposit_claim',
-                itemName: `은행 예금 만기 수령 (원금 ${principal} + 이자 ${interest})`,
-                createdAt: new Date().toISOString()
+            await runTransaction(db, async (transaction) => {
+                const depositDoc = await transaction.get(depositRef);
+                if (!depositDoc.exists()) {
+                    throw new Error("예금 내역이 존재하지 않습니다.");
+                }
+                
+                const depositData = depositDoc.data();
+                if (depositData.status === 'completed') {
+                    throw new Error("이미 수령한 예금입니다.");
+                }
+
+                const interest = Math.floor(principal * (interestRate / 100));
+                const totalReward = principal + interest;
+
+                transaction.update(depositRef, { status: 'completed' });
+                transaction.set(studentRef, { usedCookies: increment(-totalReward) }, { merge: true });
+                transaction.set(logRef, {
+                    amount: totalReward,
+                    type: 'deposit_claim',
+                    itemId: 'bank_deposit_claim',
+                    itemName: `은행 예금 만기 수령 (원금 ${principal} + 이자 ${interest})`,
+                    createdAt: new Date().toISOString()
+                });
             });
 
         } catch (error) {
