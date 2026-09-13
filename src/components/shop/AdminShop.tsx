@@ -27,12 +27,12 @@ export default function AdminShop() {
     const [editLevel, setEditLevel] = useState<number>(0);
     const [editStock, setEditStock] = useState<number>(0);
     const [editName, setEditName] = useState<string>('');
-
+    const [editCategory, setEditCategory] = useState<string>('');
     const [classCode, setClassCode] = useState<string | null>(null);
     const [className, setClassName] = useState<string | null>(null);
 
     const [selectedCategory, setSelectedCategory] = useState<'all' | 'background' | 'hair' | 'face' | 'outfit' | 'accessory' | 'cookie' | 'others' | 'consumable'>('all');
-    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages' | 'suggestions' | 'bank'>('shop');
+    const [activeTab, setActiveTab] = useState<'shop' | 'students' | 'coupons' | 'square' | 'thermometers' | 'messages' | 'suggestions' | 'bank' | 'tools'>('shop');
     const [shopTab, setShopTab] = useState<'items' | 'suggestions' | 'stats'>('items');
     const [selectedThermometerForDetails, setSelectedThermometerForDetails] = useState<Thermometer | null>(null);
     const [students, setStudents] = useState<any[]>([]);
@@ -41,6 +41,9 @@ export default function AdminShop() {
     const [loadingCoupons, setLoadingCoupons] = useState(false);
     const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
 
+    const [uploadMode, setUploadMode] = useState<'single' | 'bulk'>('single');
+    const [bulkImageFiles, setBulkImageFiles] = useState<File[]>([]);
+    
     // Coupon Issuance State
     const [isIssuingCoupon, setIsIssuingCoupon] = useState<boolean>(false);
     const [issueSelectedCoupon, setIssueSelectedCoupon] = useState<string | null>(null);
@@ -57,11 +60,23 @@ export default function AdminShop() {
     const [rewardReason, setRewardReason] = useState<string>('');
     const [selectedGiftItemId, setSelectedGiftItemId] = useState<string>('');
     const [isGiftingItem, setIsGiftingItem] = useState(false);
+    const [isLotteryModalOpen, setIsLotteryModalOpen] = useState(false);
+    const [lotteryCount, setLotteryCount] = useState<number>(1);
+    const [pickedStudents, setPickedStudents] = useState<any[] | null>(null);
+    const [isPicking, setIsPicking] = useState(false);
+    const [isSeatingModalOpen, setIsSeatingModalOpen] = useState(false);
+    const [seatingMode, setSeatingMode] = useState<'setup' | 'assigned'>('setup');
+    const [seatingGrid, setSeatingGrid] = useState<{ id: number, isActive: boolean, student: any | null }[]>(
+        Array.from({ length: 40 }, (_, i) => ({ id: i, isActive: true, student: null }))
+    );
+    const [seatingSwapIndex, setSeatingSwapIndex] = useState<number | null>(null);
     const [isProvidingCookie, setIsProvidingCookie] = useState(false);
 
     // Square Management State
     const [squareParticipants, setSquareParticipants] = useState<SquareParticipant[]>([]);
     const [squareConfig, setSquareConfig] = useState<{ background?: string; isRestricted?: boolean; allowedTimeSlots?: { start: string, end: string }[] }>({ background: 'bg.png' });
+    const [squareNotices, setSquareNotices] = useState<any[]>([]);
+    const [newNoticeMessage, setNewNoticeMessage] = useState('');
 
     const [thermometers, setThermometers] = useState<Thermometer[]>([]);
     const [newThermometer, setNewThermometer] = useState<Partial<Thermometer>>({
@@ -89,6 +104,12 @@ export default function AdminShop() {
 
     const [bankSettings, setBankSettings] = useState<BankSettings>({ rate7d: 5, rate14d: 10, rate28d: 20 });
     const [savingBankSettings, setSavingBankSettings] = useState(false);
+    
+    const [featureFlags, setFeatureFlags] = useState<{ isThermometerEnabled: boolean, isBankEnabled: boolean, isSquareEnabled: boolean }>({
+        isThermometerEnabled: true,
+        isBankEnabled: true,
+        isSquareEnabled: true
+    });
 
     const categories = [
         { id: 'all', label: '전체' },
@@ -127,7 +148,12 @@ export default function AdminShop() {
                 return { ...student, realCookies };
             }));
 
-            setStudents(studentsWithCookies);
+            const sortedStudents = studentsWithCookies.sort((a, b) => {
+                const nameA = a.name || '';
+                const nameB = b.name || '';
+                return nameA.localeCompare(nameB, 'ko');
+            });
+            setStudents(sortedStudents);
         } catch (error) {
             console.error("Failed to fetch students:", error);
         }
@@ -232,10 +258,9 @@ export default function AdminShop() {
             if (storedClassCode !== 'GLOBAL') {
                 fetchStudents(storedClassCode);
                 fetchCoupons(storedClassCode);
-                fetchStudents(storedClassCode);
-                fetchCoupons(storedClassCode);
                 fetchThermometers(storedClassCode);
                 fetchBankSettings(storedClassCode);
+                firebaseService.getFeatureFlags(storedClassCode).then(flags => setFeatureFlags(flags));
             }
         } else {
             alert("학급 정보가 없습니다. 다시 로그인해주세요.");
@@ -292,6 +317,12 @@ export default function AdminShop() {
         const unsubConfig = firebaseService.subscribeToSquareConfig(classCode, (config) => {
             setSquareConfig(config || { background: 'bg.png' });
         });
+
+        const fetchNotices = async () => {
+            const notices = await firebaseService.getSquareNotices(classCode);
+            setSquareNotices(notices);
+        };
+        fetchNotices();
 
         return () => {
             unsubParticipants();
@@ -355,7 +386,8 @@ export default function AdminShop() {
                 requiredBadge: newItem.requiredBadge || '',
                 isConsumable: itemType === 'consumable',
                 useStock: newItem.useStock || false,
-                stock: newItem.stock || 0
+                stock: newItem.stock || 0,
+                maxPerStudent: itemType === 'consumable' ? (newItem.maxPerStudent || 0) : undefined
             };
 
             if (itemType !== 'consumable' && newItem.style) {
@@ -363,7 +395,6 @@ export default function AdminShop() {
             }
 
             await firebaseService.addItem(classCode, payload);
-
 
             setNewItem({
                 name: '',
@@ -375,7 +406,8 @@ export default function AdminShop() {
                 requiredBadge: '',
                 style: { x: 0, y: 0, width: 100 },
                 useStock: false,
-                stock: 0
+                stock: 0,
+                maxPerStudent: 0
             });
             setItemType('permanent');
             setImageFile(null);
@@ -389,6 +421,76 @@ export default function AdminShop() {
         }
     };
 
+    const handleBulkAddItem = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (bulkImageFiles.length === 0) return;
+        if (newItem.price === undefined || newItem.price < 0) return;
+        if (!classCode) return;
+
+        setLoading(true);
+        try {
+            let successCount = 0;
+            let skipCount = 0;
+
+            for (const file of bulkImageFiles) {
+                // Skip if file is too large
+                if (file.size > 4 * 1024 * 1024) {
+                    console.warn(`File ${file.name} is too large, skipping.`);
+                    skipCount++;
+                    continue;
+                }
+                
+                const imageUrl = await firebaseService.uploadImage(file);
+                const fileNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name;
+
+                const payload: any = {
+                    name: fileNameWithoutExt,
+                    price: newItem.price || 0,
+                    imageUrl: imageUrl,
+                    isDonation: newItem.isDonation || false,
+                    category: newItem.category || 'accessory',
+                    requiredLevel: newItem.requiredLevel || 0,
+                    requiredBadge: newItem.requiredBadge || '',
+                    isConsumable: false,
+                    useStock: newItem.useStock || false,
+                    stock: newItem.stock || 0,
+                    style: { x: 0, y: 0, width: 100 }
+                };
+
+                await firebaseService.addItem(classCode, payload);
+                successCount++;
+            }
+
+            setNewItem({
+                name: '',
+                price: 0,
+                imageUrl: '',
+                isDonation: false,
+                category: 'accessory',
+                requiredLevel: 0,
+                requiredBadge: '',
+                style: { x: 0, y: 0, width: 100 },
+                useStock: false,
+                stock: 0,
+                maxPerStudent: 0
+            });
+            setBulkImageFiles([]);
+            fetchItems(classCode);
+            
+            let resultMsg = `${successCount}개의 아이템이 일괄 등록되었습니다!`;
+            if (skipCount > 0) resultMsg += `\n(${skipCount}개의 파일은 용량 초과로 제외됨)`;
+            alert(resultMsg);
+            
+            // Switch back to single mode after successful upload
+            setUploadMode('single');
+        } catch (error) {
+            console.error("Failed to bulk add items:", error);
+            alert("아이템 일괄 등록 중 오류가 발생했습니다. 일부만 등록되었을 수 있습니다.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleUpdateItemParams = async (item: ShopItem) => {
         if (!classCode || !item.id) return;
         try {
@@ -397,6 +499,9 @@ export default function AdminShop() {
                 price: editPrice,
                 requiredLevel: editLevel
             };
+            if (editCategory) {
+                updatePayload.category = editCategory as any;
+            }
             if (item.useStock) {
                 updatePayload.stock = editStock;
                 if (editStock > 0) updatePayload.isHidden = false;
@@ -453,8 +558,8 @@ export default function AdminShop() {
 
     const handleProvideCookie = async () => {
         if (!classCode || !selectedStudent) return;
-        if (rewardAmount <= 0) {
-            alert("지급할 쿠키 수량을 입력하세요.");
+        if (rewardAmount === 0) {
+            alert("지급하거나 차감할 쿠키 수량을 입력하세요.");
             return;
         }
         setIsProvidingCookie(true);
@@ -469,6 +574,23 @@ export default function AdminShop() {
             alert("쿠키 지급 중 오류가 발생했습니다.");
         } finally {
             setIsProvidingCookie(false);
+        }
+    };
+
+    const handleCancelCookieLog = async (logId: string, logData: any) => {
+        if (!classCode || !selectedStudent) return;
+        if (!confirm("이 쿠키 내역을 취소(환불/회수)하시겠습니까?")) return;
+        
+        try {
+            await firebaseService.cancelCookieLog(classCode, selectedStudent.id, logId, logData);
+            alert("취소 처리되었습니다.");
+            const logs = await firebaseService.getCookieLog(classCode, selectedStudent.id);
+            setStudentCookieLogs(logs);
+            // Refresh student data so the realCookies update
+            fetchStudents(classCode);
+        } catch (error) {
+            console.error(error);
+            alert("내역 취소 중 오류가 발생했습니다.");
         }
     };
 
@@ -487,6 +609,85 @@ export default function AdminShop() {
         } finally {
             setIsGiftingItem(false);
         }
+    };
+
+    const handlePickStudents = () => {
+        if (students.length === 0) {
+            alert("학생 목록이 비어 있습니다.");
+            return;
+        }
+        if (lotteryCount < 1 || lotteryCount > students.length) {
+            alert(`1명부터 ${students.length}명까지만 뽑을 수 있습니다.`);
+            return;
+        }
+
+        setIsPicking(true);
+        setPickedStudents(null);
+        
+        // Add a small delay for suspense effect
+        setTimeout(() => {
+            const shuffled = [...students].sort(() => Math.random() - 0.5);
+            setPickedStudents(shuffled.slice(0, lotteryCount));
+            setIsPicking(false);
+        }, 1500);
+    };
+
+    const handleAssignSeats = () => {
+        const activeSeatsCount = seatingGrid.filter(s => s.isActive).length;
+        if (activeSeatsCount < students.length) {
+            alert(`활성화된 자리(${activeSeatsCount}개)가 학생 수(${students.length}명)보다 적습니다.\n자리를 더 활성화해주세요.`);
+            return;
+        }
+
+        const shuffledStudents = [...students].sort(() => Math.random() - 0.5);
+        let studentIndex = 0;
+
+        const newGrid = seatingGrid.map(seat => {
+            if (seat.isActive && studentIndex < shuffledStudents.length) {
+                return { ...seat, student: shuffledStudents[studentIndex++] };
+            }
+            return { ...seat, student: null };
+        });
+
+        setSeatingGrid(newGrid);
+        setSeatingMode('assigned');
+        setSeatingSwapIndex(null);
+    };
+
+    const handleSeatClick = (index: number) => {
+        if (seatingMode === 'setup') {
+            // Toggle active status
+            const newGrid = [...seatingGrid];
+            newGrid[index].isActive = !newGrid[index].isActive;
+            setSeatingGrid(newGrid);
+        } else {
+            // Swap logic
+            if (seatingSwapIndex === null) {
+                // Select first seat to swap
+                setSeatingSwapIndex(index);
+            } else {
+                if (seatingSwapIndex === index) {
+                    // Deselect
+                    setSeatingSwapIndex(null);
+                    return;
+                }
+                
+                // Swap the students
+                const newGrid = [...seatingGrid];
+                const tempStudent = newGrid[seatingSwapIndex].student;
+                newGrid[seatingSwapIndex].student = newGrid[index].student;
+                newGrid[index].student = tempStudent;
+                
+                setSeatingGrid(newGrid);
+                setSeatingSwapIndex(null);
+            }
+        }
+    };
+
+    const handleResetSeating = () => {
+        setSeatingMode('setup');
+        setSeatingGrid(seatingGrid.map(s => ({ ...s, student: null })));
+        setSeatingSwapIndex(null);
     };
 
     const handleDownloadAvatar = async () => {
@@ -515,13 +716,16 @@ export default function AdminShop() {
                 { type: 'hair', url: eq.hair?.imageUrl, style: eq.hair?.style },
                 { type: 'outfit', url: eq.outfit?.imageUrl, style: eq.outfit?.style },
                 { type: 'accessory', url: eq.accessory?.imageUrl, style: eq.accessory?.style },
+                { type: 'accessory_0', url: eq.accessory_0?.imageUrl, style: eq.accessory_0?.style },
+                { type: 'accessory_1', url: eq.accessory_1?.imageUrl, style: eq.accessory_1?.style },
+                { type: 'accessory_2', url: eq.accessory_2?.imageUrl, style: eq.accessory_2?.style },
             ];
 
             const validLayers = layers.filter(l => l.url);
             
             for (const layer of validLayers) {
                 try {
-                    const response = await fetch(getProxyImageUrl(layer.url!));
+                    const response = await fetch(getProxyImageUrl(layer.url!), { cache: 'no-store' });
                     const blob = await response.blob();
                     const objectUrl = URL.createObjectURL(blob);
                     
@@ -647,17 +851,47 @@ export default function AdminShop() {
         }
     };
 
-    const handleToggleVisibility = async (itemId: string, currentHidden: boolean) => {
+    const handleToggleVisibility = async (itemId: string, currentHidden: boolean, isGlobalItem: boolean = false) => {
         if (!classCode) return;
         try {
-            await firebaseService.toggleGlobalItemVisibility(classCode, itemId, !currentHidden);
-            // Optimistic update or refetch
+            if (isGlobalItem) {
+                await firebaseService.toggleGlobalItemVisibility(classCode, itemId, !currentHidden);
+            } else {
+                await firebaseService.updateItem(classCode, itemId, { isHidden: !currentHidden });
+            }
+            
+            // Optimistic update
             setItems(prev => prev.map(item =>
                 item.id === itemId ? { ...item, isHidden: !currentHidden } : item
             ));
         } catch (error) {
             console.error(error);
             alert("상태 변경 실패");
+        }
+    };
+
+    const handleToggleAllVisibility = async (hide: boolean) => {
+        if (!classCode) return;
+        if (!confirm(`현재 카테고리의 모든 아이템을 ${hide ? '숨김' : '보임'} 처리하시겠습니까?`)) return;
+        setLoading(true);
+        try {
+            const promises = filteredItems.map(item => {
+                if (!item.id) return Promise.resolve();
+                const isGlobalItem = item.isGlobal && classCode !== 'GLOBAL';
+                if (isGlobalItem) {
+                    return firebaseService.toggleGlobalItemVisibility(classCode, item.id, hide);
+                } else {
+                    return firebaseService.updateItem(classCode, item.id, { isHidden: hide });
+                }
+            });
+            await Promise.all(promises);
+            fetchItems(classCode);
+            alert(`전체 아이템이 ${hide ? '숨김' : '보임'} 처리되었습니다.`);
+        } catch (error) {
+            console.error(error);
+            alert("전체 상태 변경 실패");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -870,14 +1104,13 @@ export default function AdminShop() {
                                         value={rewardAmount || ''}
                                         onChange={(e) => setRewardAmount(Number(e.target.value))}
                                         className="w-20 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-center"
-                                        min="1"
                                     />
                                     <button 
                                         onClick={handleProvideCookie}
-                                        disabled={isProvidingCookie || rewardAmount <= 0}
+                                        disabled={isProvidingCookie || rewardAmount === 0}
                                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors shadow-sm disabled:bg-gray-300 disabled:shadow-none whitespace-nowrap"
                                     >
-                                        지급
+                                        지급/차감
                                     </button>
                                 </div>
                             </div>
@@ -901,8 +1134,17 @@ export default function AdminShop() {
                                                         {new Date(log.createdAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                     </p>
                                                 </div>
-                                                <div className={`font-black ${['reward', 'deposit_claim'].includes(log.type) ? 'text-indigo-600' : 'text-orange-500'}`}>
-                                                    {['reward', 'deposit_claim'].includes(log.type) ? '+' : '-'}{log.amount}
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`font-black ${(['reward', 'deposit_claim'].includes(log.type) ? log.amount : -log.amount) > 0 ? 'text-indigo-600' : 'text-orange-500'}`}>
+                                                        {(['reward', 'deposit_claim'].includes(log.type) ? log.amount : -log.amount) > 0 ? '+' : ''}
+                                                        {['reward', 'deposit_claim'].includes(log.type) ? log.amount : -log.amount}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleCancelCookieLog(log.id, log)}
+                                                        className="px-2 py-1 bg-red-50 text-red-500 hover:bg-red-100 text-xs font-bold rounded"
+                                                    >
+                                                        취소
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))
@@ -950,6 +1192,12 @@ export default function AdminShop() {
                                 className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'students' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 👨‍🎓 우리 반 아바타 보기
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('tools')}
+                                className={`text-xl md:text-2xl font-bold transition-colors ${activeTab === 'tools' ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                🛠️ 학급경영 툴
                             </button>
                             <button
                                 onClick={() => setActiveTab('square')}
@@ -1045,10 +1293,31 @@ export default function AdminShop() {
                         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                             {/* Left: Add Item Form */}
                             <div className="bg-white rounded-xl shadow-sm p-6">
-                                <h2 className="text-xl font-bold mb-4 text-gray-800">
-                                    {classCode === 'GLOBAL' ? '공통 아이템 추가' : '우리 반 아이템 추가'}
-                                </h2>
-                                <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xl font-bold text-gray-800">
+                                        {classCode === 'GLOBAL' ? '공통 아이템 추가' : '우리 반 아이템 추가'}
+                                    </h2>
+                                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                                        <button
+                                            type="button"
+                                            onClick={() => setUploadMode('single')}
+                                            className={`px-3 py-1 text-sm font-bold rounded-md transition-all ${uploadMode === 'single' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            개별 추가
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setUploadMode('bulk')}
+                                            className={`px-3 py-1 text-sm font-bold rounded-md transition-all ${uploadMode === 'bulk' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            일괄 추가
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {uploadMode === 'single' ? (
+                                    <>
+                                        <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
                                     <button
                                         type="button"
                                         onClick={() => setItemType('permanent')}
@@ -1132,6 +1401,18 @@ export default function AdminShop() {
                                             />
                                         </div>
                                     </div>
+                                    {itemType === 'consumable' && (
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">학생당 최대 보유 가능 개수 (0 = 제한 없음)</label>
+                                            <input
+                                                type="number"
+                                                value={newItem.maxPerStudent || 0}
+                                                onChange={(e) => setNewItem({ ...newItem, maxPerStudent: Number(e.target.value) })}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                min="0"
+                                            />
+                                        </div>
+                                    )}
 
                                     {itemType === 'permanent' && (
                                         <>
@@ -1229,6 +1510,118 @@ export default function AdminShop() {
                                         {loading ? '등록 중...' : '아이템 등록하기'}
                                     </button>
                                 </form>
+                                </>
+                                ) : (
+                                    <form onSubmit={handleBulkAddItem} className="space-y-4">
+                                        <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 mb-4">
+                                            <h3 className="font-bold text-emerald-800 mb-2">📁 일괄 업로드 설정</h3>
+                                            <p className="text-sm text-emerald-600">여러 이미지 파일을 선택하면, 파일 이름이 자동으로 아이템 이름이 됩니다.<br/>아래에서 설정한 가격, 레벨 등의 옵션이 선택한 모든 파일에 동일하게 적용됩니다.</p>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">이미지 파일들 (여러 개 선택 가능)</label>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                multiple
+                                                onChange={(e) => {
+                                                    if (e.target.files) {
+                                                        setBulkImageFiles(Array.from(e.target.files));
+                                                    }
+                                                }}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                required
+                                            />
+                                            {bulkImageFiles.length > 0 && (
+                                                <p className="text-sm text-emerald-600 mt-2 font-bold">
+                                                    선택된 파일: {bulkImageFiles.length}개
+                                                </p>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">일괄 적용할 가격</label>
+                                                <input
+                                                    type="number"
+                                                    value={newItem.price}
+                                                    onChange={(e) => setNewItem({ ...newItem, price: Number(e.target.value) })}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                    min="0"
+                                                    required
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">일괄 적용할 레벨</label>
+                                                <input
+                                                    type="number"
+                                                    value={newItem.requiredLevel || 0}
+                                                    onChange={(e) => setNewItem({ ...newItem, requiredLevel: Number(e.target.value) })}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                    min="0"
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="flex flex-col gap-1">
+                                                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={newItem.useStock || false}
+                                                        onChange={(e) => setNewItem({ ...newItem, useStock: e.target.checked })}
+                                                        className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                                                    />
+                                                    재고 한정 판매 (일괄)
+                                                </label>
+                                                {newItem.useStock && (
+                                                    <input
+                                                        type="number"
+                                                        value={newItem.stock || 0}
+                                                        onChange={(e) => setNewItem({ ...newItem, stock: Number(e.target.value) })}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none mt-1"
+                                                        placeholder="재고 수량"
+                                                        min="1"
+                                                    />
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">일괄 적용할 뱃지</label>
+                                                <input
+                                                    type="text"
+                                                    value={newItem.requiredBadge || ''}
+                                                    onChange={(e) => setNewItem({ ...newItem, requiredBadge: e.target.value })}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                    placeholder="예: 독서왕"
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+                                            <select
+                                                value={newItem.category || 'accessory'}
+                                                onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                                            >
+                                                <option value="background">배경</option>
+                                                <option value="hair">헤어</option>
+                                                <option value="face">얼굴</option>
+                                                <option value="outfit">의상</option>
+                                                <option value="accessory">액세서리</option>
+                                                <option value="cookie">쿠키맛</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <button
+                                            type="submit"
+                                            disabled={loading || bulkImageFiles.length === 0}
+                                            className={`w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors ${(loading || bulkImageFiles.length === 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            {loading ? '일괄 등록 중...' : `${bulkImageFiles.length}개 아이템 일괄 등록하기`}
+                                        </button>
+                                    </form>
+                                )}
                             </div>
 
                             {/* Right: Avatar Preview */}
@@ -1250,8 +1643,23 @@ export default function AdminShop() {
                         {/* Item List */}
                         <div className="lg:col-span-3">
                             <div className="bg-white rounded-xl shadow-sm p-6">
-                                <h2 className="text-xl font-bold mb-4 text-gray-800">등록된 아이템 목록 ({filteredItems.length})</h2>
-
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xl font-bold text-gray-800">등록된 아이템 목록 ({filteredItems.length})</h2>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => handleToggleAllVisibility(false)}
+                                            className="px-3 py-1 text-sm font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors"
+                                        >
+                                            👀 모두 보이기
+                                        </button>
+                                        <button
+                                            onClick={() => handleToggleAllVisibility(true)}
+                                            className="px-3 py-1 text-sm font-bold bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100 transition-colors"
+                                        >
+                                            🙈 모두 숨기기
+                                        </button>
+                                    </div>
+                                </div>
                                 {/* Category Filter Tabs */}
                                 <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
                                     {categories.map((cat) => (
@@ -1324,26 +1732,24 @@ export default function AdminShop() {
 
                                                     {/* Actions */}
                                                     <div className="flex flex-col items-end gap-1">
-                                                        {/* If it's a global item seen by a teacher, show Toggle Hide */}
-                                                        {isGlobalItem ? (
-                                                            <button
-                                                                onClick={() => item.id && handleToggleVisibility(item.id, !!isHidden)}
-                                                                className={`text-xs font-bold px-2 py-1 rounded border ${isHidden ? 'bg-gray-200 text-gray-600 border-gray-300' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}
-                                                            >
-                                                                {isHidden ? '보이기' : '숨기기'}
-                                                            </button>
-                                                        ) : (
-                                                            // Local item or Admin view: Show Delete and Download
+                                                        <button
+                                                            onClick={() => item.id && handleToggleVisibility(item.id, !!isHidden, isGlobalItem)}
+                                                            className={`text-xs font-bold px-2 py-1 rounded border ${isHidden ? 'bg-gray-200 text-gray-600 border-gray-300' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}
+                                                        >
+                                                            {isHidden ? '보이기' : '숨기기'}
+                                                        </button>
+                                                        
+                                                        {!isGlobalItem && (
                                                             <>
                                                                 <button
                                                                     onClick={() => item.imageUrl && handleDownloadImage(getProxyImageUrl(item.imageUrl), item.name)}
-                                                                    className="text-blue-500 hover:text-blue-700 text-xs font-bold bg-blue-50 px-2 py-1 rounded mb-1 whitespace-nowrap shrink-0"
+                                                                    className="text-blue-500 hover:text-blue-700 text-xs font-bold bg-blue-50 px-2 py-1 rounded mt-1 whitespace-nowrap shrink-0"
                                                                 >
                                                                     ⬇️ 저장
                                                                 </button>
                                                                 <button
                                                                     onClick={() => item.id && handleDeleteItem(item.id)}
-                                                                    className="text-red-400 hover:text-red-600 text-sm"
+                                                                    className="text-red-400 hover:text-red-600 text-xs mt-1"
                                                                 >
                                                                     삭제
                                                                 </button>
@@ -1386,6 +1792,24 @@ export default function AdminShop() {
                                                                         min="0"
                                                                     />
                                                                 </div>
+                                                                {!item.isConsumable && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs text-gray-500 w-8 shrink-0">부위:</span>
+                                                                        <select 
+                                                                            value={editCategory}
+                                                                            onChange={(e) => setEditCategory(e.target.value)}
+                                                                            className="w-full px-2 py-1 border rounded text-sm bg-white"
+                                                                        >
+                                                                            <option value="background">배경</option>
+                                                                            <option value="hair">머리</option>
+                                                                            <option value="face">얼굴</option>
+                                                                            <option value="outfit">옷</option>
+                                                                            <option value="accessory">장신구</option>
+                                                                            <option value="cookie">쿠키</option>
+                                                                            <option value="others">기타</option>
+                                                                        </select>
+                                                                    </div>
+                                                                )}
                                                                 {item.useStock && (
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="text-xs text-gray-500 w-8 shrink-0">재고:</span>
@@ -1423,6 +1847,7 @@ export default function AdminShop() {
                                                                         setEditPrice(item.price);
                                                                         setEditLevel(item.requiredLevel || 0);
                                                                         setEditStock(item.stock || 0);
+                                                                        setEditCategory(item.category || '');
                                                                     }}
                                                                     className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                                                                 >
@@ -1950,7 +2375,20 @@ export default function AdminShop() {
                 ) : activeTab === 'square' ? (
                     <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
                         <div className="mb-6 border-b pb-4">
-                            <h2 className="text-xl font-bold text-gray-800">🌳 광장 관리</h2>
+                            <div className="flex justify-between items-center flex-wrap gap-2">
+                                <h2 className="text-xl font-bold text-gray-800">🌳 광장 관리</h2>
+                                <label className="flex items-center gap-2 cursor-pointer bg-gray-100 px-3 py-1.5 rounded-full hover:bg-gray-200 transition-colors">
+                                    <span className="text-sm font-bold text-gray-700">학생 화면에서 숨기기</span>
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only peer" checked={!featureFlags.isSquareEnabled} onChange={(e) => {
+                                            const newFlags = { ...featureFlags, isSquareEnabled: !e.target.checked };
+                                            setFeatureFlags(newFlags);
+                                            if (classCode) firebaseService.updateFeatureFlags(classCode, newFlags);
+                                        }} />
+                                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                                    </div>
+                                </label>
+                            </div>
                             <p className="text-sm text-gray-500 mt-1">우리 반 광장의 배경과 접속 중인 학생들을 관리합니다.</p>
                         </div>
 
@@ -1998,6 +2436,79 @@ export default function AdminShop() {
                                                 </div>
                                             </div>
                                         ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 광장 공지사항 등록 및 관리 */}
+                            <div className="md:col-span-2 bg-indigo-50/50 p-5 rounded-lg border border-indigo-100 mb-2">
+                                <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <span>📢</span> 광장 공지사항 등록
+                                </h3>
+                                <p className="text-sm text-gray-600 mb-4 bg-white p-3 rounded border border-indigo-50 shadow-sm">
+                                    여기에 공지사항을 등록하면 광장에 접속한 모든 학생들의 <strong>화면 최상단에 말풍선 형태로 고정</strong>됩니다. 새로운 공지사항을 등록하면 이전 공지사항은 자동으로 내려갑니다.
+                                </p>
+                                <div className="flex gap-2 mb-6">
+                                    <input 
+                                        type="text" 
+                                        value={newNoticeMessage}
+                                        onChange={(e) => setNewNoticeMessage(e.target.value)}
+                                        placeholder="학생들에게 전달할 공지사항을 입력하세요..." 
+                                        className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-400 outline-none shadow-sm"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && classCode && newNoticeMessage.trim()) {
+                                                firebaseService.addSquareNotice(classCode, newNoticeMessage);
+                                                setNewNoticeMessage('');
+                                                setTimeout(() => {
+                                                    firebaseService.getSquareNotices(classCode).then(setSquareNotices);
+                                                }, 300);
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            if (classCode && newNoticeMessage.trim()) {
+                                                firebaseService.addSquareNotice(classCode, newNoticeMessage);
+                                                setNewNoticeMessage('');
+                                                setTimeout(() => {
+                                                    firebaseService.getSquareNotices(classCode).then(setSquareNotices);
+                                                }, 300);
+                                            }
+                                        }}
+                                        className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm whitespace-nowrap"
+                                    >
+                                        등록하기
+                                    </button>
+                                </div>
+                                
+                                {squareNotices.length > 0 && (
+                                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 font-bold text-sm text-gray-700">공지사항 기록</div>
+                                        <div className="max-h-48 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-2">
+                                            {squareNotices.map((notice) => (
+                                                <div key={notice.id} className={`p-3 rounded-lg border ${notice.isActive ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-100 text-gray-500'} flex justify-between items-start gap-4`}>
+                                                    <div className="flex-1">
+                                                        <div className="text-sm font-medium whitespace-pre-wrap">{notice.message}</div>
+                                                        <div className="text-xs mt-1 opacity-70">
+                                                            {notice.createdAt?.toDate ? new Date(notice.createdAt.toDate()).toLocaleString() : '방금 전'}
+                                                        </div>
+                                                    </div>
+                                                    {notice.isActive && (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (classCode) {
+                                                                    await firebaseService.deactivateSquareNotice(classCode, notice.id!);
+                                                                    firebaseService.getSquareNotices(classCode).then(setSquareNotices);
+                                                                }
+                                                            }}
+                                                            className="text-xs bg-white text-gray-600 px-2 py-1 rounded border hover:bg-gray-100 shrink-0"
+                                                        >
+                                                            내리기
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -2199,7 +2710,20 @@ export default function AdminShop() {
                 ) : activeTab === 'thermometers' ? (
                     <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
                         <div className="mb-6 border-b pb-4">
-                            <h2 className="text-xl font-bold text-gray-800">🌡️ 학급온도 관리</h2>
+                            <div className="flex justify-between items-center flex-wrap gap-2">
+                                <h2 className="text-xl font-bold text-gray-800">🌡️ 학급온도 관리</h2>
+                                <label className="flex items-center gap-2 cursor-pointer bg-gray-100 px-3 py-1.5 rounded-full hover:bg-gray-200 transition-colors">
+                                    <span className="text-sm font-bold text-gray-700">학생 화면에서 숨기기</span>
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only peer" checked={!featureFlags.isThermometerEnabled} onChange={(e) => {
+                                            const newFlags = { ...featureFlags, isThermometerEnabled: !e.target.checked };
+                                            setFeatureFlags(newFlags);
+                                            if (classCode) firebaseService.updateFeatureFlags(classCode, newFlags);
+                                        }} />
+                                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                                    </div>
+                                </label>
+                            </div>
                             <p className="text-sm text-gray-500 mt-1">우리 반에 여러 개의 온도계를 설정하고 기부 방향을 다양하게 열어주세요.</p>
                         </div>
                         
@@ -2450,9 +2974,22 @@ export default function AdminShop() {
                 ) : activeTab === 'bank' ? (
                     <div className="bg-white rounded-xl shadow-sm p-6 max-w-4xl mx-auto">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
-                                <span>🏦</span> 예금 이율 설정
-                            </h2>
+                            <div className="flex items-center gap-4">
+                                <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
+                                    <span>🏦</span> 예금 이율 설정
+                                </h2>
+                                <label className="flex items-center gap-2 cursor-pointer bg-gray-100 px-3 py-1.5 rounded-full hover:bg-gray-200 transition-colors">
+                                    <span className="text-sm font-bold text-gray-700">학생 화면에서 숨기기</span>
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only peer" checked={!featureFlags.isBankEnabled} onChange={(e) => {
+                                            const newFlags = { ...featureFlags, isBankEnabled: !e.target.checked };
+                                            setFeatureFlags(newFlags);
+                                            if (classCode) firebaseService.updateFeatureFlags(classCode, newFlags);
+                                        }} />
+                                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                                    </div>
+                                </label>
+                            </div>
                             <button
                                 onClick={handleSaveBankSettings}
                                 disabled={savingBankSettings}
@@ -2522,6 +3059,49 @@ export default function AdminShop() {
                         </div>
 
                     </div>
+                ) : activeTab === 'tools' ? (
+                    <div className="bg-white rounded-xl shadow-sm p-6 mb-8 animate-fade-in">
+                        <div className="mb-6 border-b pb-4">
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <span>🛠️</span> 학급경영 툴
+                            </h2>
+                            <p className="text-gray-500 mt-1 text-sm">선생님의 편리한 학급 운영을 위한 다양한 기능들을 제공합니다.</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {/* 추첨 (뽑기) */}
+                            <div 
+                                onClick={() => setIsLotteryModalOpen(true)}
+                                className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all cursor-pointer group bg-gray-50 hover:bg-white flex flex-col items-center text-center"
+                            >
+                                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform duration-300">🎲</div>
+                                <h3 className="text-lg font-bold text-gray-800 mb-2">학생 랜덤 뽑기</h3>
+                                <p className="text-sm text-gray-500 mb-4 h-10">우리 반 학생들 중 무작위로<br/>한 명 이상의 학생을 추첨합니다.</p>
+                                <button className="mt-auto px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg font-bold w-full group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                    실행하기
+                                </button>
+                            </div>
+
+                            {/* 자리 배치표 */}
+                            <div 
+                                onClick={() => setIsSeatingModalOpen(true)}
+                                className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all cursor-pointer group bg-gray-50 hover:bg-white flex flex-col items-center text-center"
+                            >
+                                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform duration-300">🪑</div>
+                                <h3 className="text-lg font-bold text-gray-800 mb-2">자리 배치표</h3>
+                                <p className="text-sm text-gray-500 mb-4 h-10">무작위로 학생들의 자리를<br/>배치하고 화면에 띄웁니다.</p>
+                                <button className="mt-auto px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg font-bold w-full group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                    실행하기
+                                </button>
+                            </div>
+                            
+                            {/* 추가 도구 예약석 */}
+                            <div className="border border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center text-gray-400 min-h-[220px]">
+                                <div className="text-3xl mb-2 opacity-50">➕</div>
+                                <p className="text-sm font-bold">새로운 툴이<br/>추가될 예정입니다</p>
+                            </div>
+                        </div>
+                    </div>
                 ) : null}
             </div>
 
@@ -2566,6 +3146,183 @@ export default function AdminShop() {
                     </div>
                 </a>
             </div>
+
+            {/* Lottery Modal */}
+            {isLotteryModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setIsLotteryModalOpen(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 relative flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setIsLotteryModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 z-10 p-1 bg-white rounded-full transition-colors border shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+
+                        <div className="text-center mb-6">
+                            <h2 className="text-3xl font-black text-gray-800 mb-2">🎲 학생 랜덤 뽑기</h2>
+                            <p className="text-gray-500">우리 반 학생 중 무작위로 추첨합니다.</p>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                            {isPicking ? (
+                                <div className="flex flex-col items-center justify-center py-20 text-center animate-pulse">
+                                    <div className="text-6xl mb-4 animate-bounce">🎲</div>
+                                    <h3 className="text-2xl font-bold text-gray-800">두구두구두구...</h3>
+                                    <p className="text-gray-500 mt-2">당첨자를 추첨하고 있습니다!</p>
+                                </div>
+                            ) : pickedStudents ? (
+                                <div className="flex flex-col items-center">
+                                    <h3 className="text-2xl font-bold text-indigo-600 mb-6">🎉 당첨을 축하합니다! 🎉</h3>
+                                    <div className="flex flex-wrap justify-center gap-6 mb-8">
+                                        {pickedStudents.map(student => (
+                                            <div key={student.id} className="flex flex-col items-center bg-indigo-50 p-4 rounded-xl shadow-sm border border-indigo-100 transform transition-all duration-500 hover:scale-105">
+                                                <div className="mb-3">
+                                                    <AvatarDisplay equippedItems={student.equippedItems || {}} size={120} />
+                                                </div>
+                                                <span className="font-bold text-xl text-gray-800">{student.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-10">
+                                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 text-center w-full max-w-sm">
+                                        <h3 className="font-bold text-gray-700 mb-4">몇 명을 뽑을까요?</h3>
+                                        <div className="flex items-center justify-center gap-4">
+                                            <button 
+                                                onClick={() => setLotteryCount(Math.max(1, lotteryCount - 1))}
+                                                className="w-10 h-10 rounded-full bg-white border border-gray-300 text-gray-600 font-bold text-xl hover:bg-gray-100 flex items-center justify-center shadow-sm"
+                                            >
+                                                -
+                                            </button>
+                                            <input 
+                                                type="number" 
+                                                value={lotteryCount}
+                                                onChange={(e) => setLotteryCount(Math.max(1, Math.min(students.length, Number(e.target.value))))}
+                                                className="w-20 text-center text-2xl font-bold p-2 border-b-2 border-indigo-500 outline-none bg-transparent"
+                                                min="1"
+                                                max={students.length}
+                                            />
+                                            <button 
+                                                onClick={() => setLotteryCount(Math.min(students.length, lotteryCount + 1))}
+                                                className="w-10 h-10 rounded-full bg-white border border-gray-300 text-gray-600 font-bold text-xl hover:bg-gray-100 flex items-center justify-center shadow-sm"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                        <p className="text-sm text-gray-400 mt-4">최대 {students.length}명까지 가능</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-gray-100 flex gap-3">
+                            {(!isPicking && pickedStudents) ? (
+                                <>
+                                    <button 
+                                        onClick={() => setPickedStudents(null)} 
+                                        className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                                    >
+                                        처음으로
+                                    </button>
+                                    <button 
+                                        onClick={handlePickStudents} 
+                                        className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-md"
+                                    >
+                                        다시 뽑기
+                                    </button>
+                                </>
+                            ) : (!isPicking && !pickedStudents) ? (
+                                <button 
+                                    onClick={handlePickStudents} 
+                                    className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg hover:bg-indigo-700 transition-colors shadow-md"
+                                >
+                                    추첨 시작하기
+                                </button>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Seating Modal */}
+            {isSeatingModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setIsSeatingModalOpen(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-6 relative flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setIsSeatingModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 z-10 p-1 bg-white rounded-full transition-colors border shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+
+                        <div className="text-center mb-4">
+                            <h2 className="text-3xl font-black text-gray-800 mb-2">🪑 자리 배치표</h2>
+                            <p className="text-gray-500">
+                                {seatingMode === 'setup' 
+                                    ? "배치할 자리를 클릭하여 켜거나 끄세요. (회색=비활성화)"
+                                    : "자리를 바꿀 두 학생을 차례대로 클릭하세요."}
+                            </p>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 bg-gray-50 rounded-xl border border-gray-200">
+                            {/* 교탁 (Teacher Desk) */}
+                            <div className="flex justify-center mb-8 mt-2">
+                                <div className="px-16 py-3 bg-gray-700 text-white font-bold rounded-lg shadow-sm">교 탁</div>
+                            </div>
+                            
+                            {/* Grid (8 columns x 5 rows) */}
+                            <div className="grid grid-cols-8 gap-3 max-w-4xl mx-auto">
+                                {seatingGrid.map((seat, index) => (
+                                    <div 
+                                        key={index}
+                                        onClick={() => handleSeatClick(index)}
+                                        className={`
+                                            relative flex flex-col items-center justify-center aspect-square rounded-xl border-2 transition-all cursor-pointer select-none
+                                            ${!seat.isActive ? 'bg-gray-200 border-gray-300 opacity-50' : 'bg-white border-gray-200 hover:border-indigo-300 shadow-sm hover:shadow-md'}
+                                            ${seatingSwapIndex === index ? 'ring-4 ring-indigo-500 border-indigo-500 bg-indigo-50' : ''}
+                                        `}
+                                    >
+                                        {seat.isActive && seat.student ? (
+                                            <div className="flex flex-col items-center justify-center p-1 w-full h-full">
+                                                <div className="flex-1 w-full flex items-center justify-center transform scale-75 md:scale-100 origin-center">
+                                                    <AvatarDisplay equippedItems={seat.student.equippedItems || {}} size={60} />
+                                                </div>
+                                                <span className="font-bold text-xs md:text-sm text-gray-800 bg-white/80 px-1 rounded truncate w-full text-center">{seat.student.name}</span>
+                                            </div>
+                                        ) : seat.isActive ? (
+                                            <span className="text-gray-300 text-xs font-bold">{index + 1}</span>
+                                        ) : (
+                                            <span className="text-gray-400 text-2xl font-bold">×</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-gray-100 flex gap-3">
+                            {seatingMode === 'setup' ? (
+                                <button 
+                                    onClick={handleAssignSeats} 
+                                    className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg hover:bg-indigo-700 transition-colors shadow-md"
+                                >
+                                    자리 배치하기 (현재 학생 수: {students.length}명)
+                                </button>
+                            ) : (
+                                <>
+                                    <button 
+                                        onClick={handleResetSeating} 
+                                        className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                                    >
+                                        자리 다시 세팅하기
+                                    </button>
+                                    <button 
+                                        onClick={handleAssignSeats} 
+                                        className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-md"
+                                    >
+                                        현재 자리에서 다시 섞기
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Thermometer Details Modal */}
             {selectedThermometerForDetails && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedThermometerForDetails(null)}>

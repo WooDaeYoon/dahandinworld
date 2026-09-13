@@ -53,6 +53,14 @@ export default function Bank() {
             // Get Deposits
             fetchDeposits(cCode, code);
 
+            // Check feature flags
+            const flags = await firebaseService.getFeatureFlags(cCode);
+            if (!flags.isBankEnabled) {
+                alert("현재 은행 기능은 비활성화 되어있습니다.");
+                window.location.href = '/shop';
+                return;
+            }
+
             // Get Cookies
             if (key) {
                 const response = await dahandinClient.getStudentTotal(code, key);

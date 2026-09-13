@@ -24,6 +24,7 @@ export interface ShopItem {
     isConsumable?: boolean; // True if item is a consumable/coupon
     useStock?: boolean;
     stock?: number;
+    maxPerStudent?: number; // Max possession limit per student (for consumables)
     creatorName?: string;
     salesCount?: number;
     salesCookies?: number;
@@ -91,6 +92,18 @@ export interface BankDeposit {
     status: 'active' | 'completed';
 }
 
+export interface SquareNotice {
+    id?: string;
+    message: string;
+    createdAt: any;
+    isActive: boolean;
+}
+
+export interface FeatureFlags {
+    isThermometerEnabled: boolean;
+    isBankEnabled: boolean;
+    isSquareEnabled: boolean;
+}
 
 
 const resolveClassPath = (classCode: string) => {
@@ -344,10 +357,18 @@ export const firebaseService = {
     updateItem: async (classCode: string, itemId: string, updates: Partial<ShopItem>) => {
         try {
             const itemRef = doc(db, `${getResolvedPath(classCode)}/shopItems`, itemId);
+            
+            // Get original item to check if category changed
+            let oldCategory = '';
+            try {
+                const snap = await getDoc(itemRef);
+                if (snap.exists()) oldCategory = snap.data().category || '';
+            } catch(e) {}
+            
             await updateDoc(itemRef, updates);
 
-            // If name is updated and it's not a GLOBAL operation (too huge), update all students' inventories in that class
-            if (updates.name && classCode !== 'GLOBAL') {
+            // If name or category is updated and it's not a GLOBAL operation (too huge), update all students' inventories in that class
+            if ((updates.name || updates.category) && classCode !== 'GLOBAL') {
                 const studentsRef = collection(db, `${getResolvedPath(classCode)}/students`);
                 const studentsSnap = await getDocs(studentsRef);
                 
@@ -356,10 +377,27 @@ export const firebaseService = {
                     try {
                         const invSnap = await getDoc(inventoryRef);
                         if (invSnap.exists()) {
-                            await updateDoc(inventoryRef, { name: updates.name });
+                            const invUpdates: any = {};
+                            if (updates.name) invUpdates.name = updates.name;
+                            if (updates.category) invUpdates.category = updates.category;
+                            if (Object.keys(invUpdates).length > 0) {
+                                await updateDoc(inventoryRef, invUpdates);
+                            }
                         }
-                    } catch (e) {
-                        // ignore if student doesn't have it
+                    } catch (e) {}
+
+                    // If category changed, check if they have it equipped in the old category slot
+                    if (updates.category && oldCategory && updates.category !== oldCategory) {
+                        try {
+                            const studentData = studentDoc.data();
+                            if (studentData.equippedItems && studentData.equippedItems[oldCategory] && studentData.equippedItems[oldCategory].id === itemId) {
+                                // Unequip it!
+                                const studentRef = doc(db, `${getResolvedPath(classCode)}/students/${studentDoc.id}`);
+                                await updateDoc(studentRef, {
+                                    [`equippedItems.${oldCategory}`]: deleteField()
+                                });
+                            }
+                        } catch (e) {}
                     }
                 });
                 
@@ -669,6 +707,43 @@ export const firebaseService = {
         }
     },
 
+    cancelCookieLog: async (classCode: string, studentCode: string, logId: string, logData: any) => {
+        try {
+            const studentRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}`);
+            let amountToRevert = 0;
+            
+            if (logData.type === 'purchase' || logData.type === 'donation' || logData.type === 'deposit') {
+                amountToRevert = -Number(logData.amount); // Revert deduction
+            } else if (logData.type === 'reward' || logData.type === 'deposit_claim') {
+                amountToRevert = Number(logData.amount); // Revert grant
+            }
+
+            if (amountToRevert !== 0) {
+                await setDoc(studentRef, { usedCookies: increment(amountToRevert) }, { merge: true });
+            }
+
+            const logRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}/cookielog`, logId);
+            await deleteDoc(logRef);
+
+            // If it was a purchase, also revert the item from inventory
+            if (logData.type === 'purchase' && logData.itemId) {
+                const inventoryRef = doc(db, `${getResolvedPath(classCode)}/students/${studentCode}/inventory`, logData.itemId);
+                const invSnap = await getDoc(inventoryRef);
+                if (invSnap.exists()) {
+                    const currentQty = invSnap.data().quantity || 1;
+                    if (currentQty <= 1) {
+                        await deleteDoc(inventoryRef);
+                    } else {
+                        await updateDoc(inventoryRef, { quantity: increment(-1) });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Error canceling cookie log:", error);
+            throw error;
+        }
+    },
+
     // Sync Student Data
     syncStudentData: async (classCode: string, studentCode: string, name: string) => {
         try {
@@ -940,6 +1015,58 @@ export const firebaseService = {
         return messages;
     },
 
+    // --- SQUARE NOTICE SYSTEM ---
+    addSquareNotice: async (classCode: string, message: string) => {
+        if (!classCode || !message.trim()) return;
+        const noticesRef = collection(db, `${getResolvedPath(classCode)}/square_notices`);
+        
+        // Deactivate all existing notices first
+        const activeQ = query(noticesRef, where('isActive', '==', true));
+        const snapshot = await getDocs(activeQ);
+        const batchUpdates = snapshot.docs.map(docSnap => updateDoc(docSnap.ref, { isActive: false }));
+        await Promise.all(batchUpdates);
+
+        // Add new active notice
+        await addDoc(noticesRef, {
+            message,
+            createdAt: serverTimestamp(),
+            isActive: true
+        });
+    },
+
+    getSquareNotices: async (classCode: string): Promise<SquareNotice[]> => {
+        if (!classCode) return [];
+        const q = query(
+            collection(db, `${getResolvedPath(classCode)}/square_notices`),
+            orderBy('createdAt', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SquareNotice));
+    },
+
+    subscribeToSquareNotice: (classCode: string, callback: (notice: SquareNotice | null) => void) => {
+        if (!classCode) return () => {};
+        const q = query(
+            collection(db, `${getResolvedPath(classCode)}/square_notices`),
+            where('isActive', '==', true),
+            limit(1)
+        );
+        return onSnapshot(q, (snapshot) => {
+            if (snapshot.empty) {
+                callback(null);
+            } else {
+                const doc = snapshot.docs[0];
+                callback({ id: doc.id, ...doc.data() } as SquareNotice);
+            }
+        });
+    },
+    
+    deactivateSquareNotice: async (classCode: string, noticeId: string) => {
+        if (!classCode || !noticeId) return;
+        const docRef = doc(db, `${getResolvedPath(classCode)}/square_notices/${noticeId}`);
+        await updateDoc(docRef, { isActive: false });
+    },
+
     // --- TEACHER ACCOUNT SYSTEM ---
 
     registerTeacher: async (teacherId: string, password: string, apiKey: string, className: string, classCode: string, schoolName?: string, teacherName?: string) => {
@@ -1144,6 +1271,12 @@ export const firebaseService = {
                     throw new Error("이미 수령한 예금입니다.");
                 }
 
+                const now = new Date();
+                const endDate = new Date(depositData.endDate);
+                if (now < endDate) {
+                    throw new Error("아직 예금 만기일이 지나지 않았습니다.");
+                }
+
                 const interest = Math.floor(principal * (interestRate / 100));
                 const totalReward = principal + interest;
 
@@ -1160,6 +1293,35 @@ export const firebaseService = {
 
         } catch (error) {
             console.error("Error claiming deposit:", error);
+            throw error;
+        }
+    },
+
+    getFeatureFlags: async (classCode: string): Promise<FeatureFlags> => {
+        const defaultFlags: FeatureFlags = {
+            isThermometerEnabled: true,
+            isBankEnabled: true,
+            isSquareEnabled: true
+        };
+        try {
+            const classRef = doc(db, getResolvedPath(classCode));
+            const snap = await getDoc(classRef);
+            if (snap.exists() && snap.data().featureFlags) {
+                return { ...defaultFlags, ...snap.data().featureFlags };
+            }
+            return defaultFlags;
+        } catch (error) {
+            console.error("Error getting feature flags:", error);
+            return defaultFlags;
+        }
+    },
+
+    updateFeatureFlags: async (classCode: string, flags: Partial<FeatureFlags>) => {
+        try {
+            const classRef = doc(db, getResolvedPath(classCode));
+            await setDoc(classRef, { featureFlags: flags }, { merge: true });
+        } catch (error) {
+            console.error("Error updating feature flags:", error);
             throw error;
         }
     }

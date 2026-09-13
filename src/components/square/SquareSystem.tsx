@@ -22,6 +22,8 @@ export default function SquareSystem() {
     const [teacherMessageText, setTeacherMessageText] = useState('');
     const [isSendingTeacherMessage, setIsSendingTeacherMessage] = useState(false);
 
+    const [activeNotice, setActiveNotice] = useState<{ message: string, createdAt: any } | null>(null);
+
     // For speech bubbles: Map studentCode -> { message, expiresAt }
     const [bubbles, setBubbles] = useState<Record<string, { message: string, expiresAt: number }>>({});
 
@@ -41,12 +43,18 @@ export default function SquareSystem() {
         const storedName = localStorage.getItem('studentName');
 
         if (storedClass && storedCode && storedName) {
-            setClassCode(storedClass);
-            setStudentCode(storedCode);
-            setStudentName(storedName);
-
-            // Join Square
-            joinSquare(storedClass, storedCode, storedName);
+            firebaseService.getFeatureFlags(storedClass).then(flags => {
+                if (!flags.isSquareEnabled) {
+                    alert("현재 광장 기능은 비활성화 되어있습니다.");
+                    router.replace('/shop');
+                } else {
+                    setClassCode(storedClass);
+                    setStudentCode(storedCode);
+                    setStudentName(storedName);
+                    // Join Square
+                    joinSquare(storedClass, storedCode, storedName);
+                }
+            });
         } else {
             alert("로그인 정보가 없습니다.");
             router.replace('/login');
@@ -89,6 +97,11 @@ export default function SquareSystem() {
             }
         });
 
+        // Notice Subscription
+        const unsubNotice = firebaseService.subscribeToSquareNotice(classCode, (notice) => {
+            setActiveNotice(notice);
+        });
+
         const unsubChat = firebaseService.subscribeToChat(classCode, (msgs) => {
             setMessages(msgs);
             // Update bubbles for new messages
@@ -114,6 +127,7 @@ export default function SquareSystem() {
         return () => {
             unsubParticipants();
             unsubConfig();
+            unsubNotice();
             unsubChat();
         };
     }, [classCode]);
@@ -311,7 +325,29 @@ export default function SquareSystem() {
                 </div>
             </header>
 
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden relative">
+                {/* Floating Square Notice */}
+                {activeNotice && (
+                    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in w-full max-w-2xl px-4">
+                        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4 flex items-start gap-4">
+                            <div className="text-blue-500 mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M4.004 9.004H7.5l5.22-3.48a1 1 0 0 1 1.554.832v11.288a1 1 0 0 1-1.554.832l-5.22-3.48H4.004a2 2 0 0 1-2-2v-3.992a2 2 0 0 1 2-2zM17.5 16.5c1.657-1.657 1.657-4.343 0-6M20.5 19.5c3.314-3.314 3.314-8.686 0-12"/>
+                                </svg>
+                            </div>
+                            <div className="flex-1">
+                                <div className="font-black text-gray-800 text-sm whitespace-pre-wrap leading-snug">{activeNotice.message}</div>
+                                <div className="text-xs text-gray-400 mt-1">
+                                    {activeNotice.createdAt?.toDate ? new Date(activeNotice.createdAt.toDate()).toLocaleDateString() : ''}
+                                </div>
+                            </div>
+                            <button onClick={() => setActiveNotice(null)} className="text-gray-400 hover:text-gray-600 p-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Main Square Area (Avatars) */}
                 <div
                     className="flex-1 relative p-8 pt-24 overflow-y-auto custom-scrollbar bg-cover bg-center bg-no-repeat transition-all duration-500"

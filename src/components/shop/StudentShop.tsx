@@ -23,6 +23,13 @@ export default function StudentShop() {
     
     // Thermometer State
     const [thermometers, setThermometers] = useState<Thermometer[]>([]);
+    
+    // Feature Flags
+    const [featureFlags, setFeatureFlags] = useState<{ isThermometerEnabled: boolean, isBankEnabled: boolean, isSquareEnabled: boolean }>({
+        isThermometerEnabled: true,
+        isBankEnabled: true,
+        isSquareEnabled: true
+    });
 
     const [inventory, setInventory] = useState<ShopItem[]>([]);
     const [equippedItems, setEquippedItems] = useState<Record<string, ShopItem>>({});
@@ -90,6 +97,7 @@ export default function StudentShop() {
             fetchItems(storedClassCode);
             fetchGlobalStats(storedClassCode);
             fetchThermometers(storedClassCode);
+            firebaseService.getFeatureFlags(storedClassCode).then(flags => setFeatureFlags(flags));
         }
 
         if (storedStudentCode && storedClassCode && storedApiKey) {
@@ -219,6 +227,16 @@ export default function StudentShop() {
             alert("쿠키가 부족합니다!");
             return;
         }
+
+        if (item.isConsumable && item.maxPerStudent && item.maxPerStudent > 0) {
+            const invItem = inventory.find(i => i.id === item.id);
+            const count = invItem ? (invItem.quantity || 1) : 0;
+            if (count >= item.maxPerStudent) {
+                alert(`이 아이템은 최대 ${item.maxPerStudent}개까지만 보유할 수 있습니다.`);
+                return;
+            }
+        }
+
         setSelectedItem(item);
         if (item.isDonation && thermometers.length > 0) {
             setSelectedThermometerId(thermometers[0].id!);
@@ -382,7 +400,7 @@ export default function StudentShop() {
             
             for (const layer of validLayers) {
                 try {
-                    const response = await fetch(getProxyImageUrl(layer.url!));
+                    const response = await fetch(getProxyImageUrl(layer.url!), { cache: 'no-store' });
                     const blob = await response.blob();
                     const objectUrl = URL.createObjectURL(blob);
                     
@@ -568,41 +586,43 @@ export default function StudentShop() {
                     </div>
 
                     {/* Love Temperature (Global / Class) */}
-                    {thermometers.length > 0 ? (
-                        <div className="space-y-4">
-                            {thermometers.map((t, idx) => (
-                                <div key={t.id || idx} className="bg-gradient-to-br from-orange-400 to-red-600 rounded-2xl shadow-lg p-6 text-white">
-                                    <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
-                                        <span>🌡️</span> {t.name}
-                                    </h2>
-                                    <div className="flex justify-between items-end mb-2">
-                                        <div className="text-4xl font-black">{t.currentDegree.toFixed(1)}°C</div>
-                                        <div className="text-sm font-bold text-white/90">목표: {t.targetDegree}°C</div>
+                    {featureFlags.isThermometerEnabled && (
+                        thermometers.length > 0 ? (
+                            <div className="space-y-4">
+                                {thermometers.map((t, idx) => (
+                                    <div key={t.id || idx} className="bg-gradient-to-br from-orange-400 to-red-600 rounded-2xl shadow-lg p-6 text-white">
+                                        <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
+                                            <span>🌡️</span> {t.name}
+                                        </h2>
+                                        <div className="flex justify-between items-end mb-2">
+                                            <div className="text-4xl font-black">{t.currentDegree.toFixed(1)}°C</div>
+                                            <div className="text-sm font-bold text-white/90">목표: {t.targetDegree}°C</div>
+                                        </div>
+                                        <div className="w-full bg-white/30 rounded-full h-2">
+                                            <div
+                                                className="bg-white h-2 rounded-full transition-all duration-1000"
+                                                style={{ width: `${Math.min((t.currentDegree / t.targetDegree) * 100, 100)}%` }}
+                                            ></div>
+                                        </div>
+                                        <p className="text-xs mt-2 text-white/80">친구들과 함께 기부하여 목표를 달성하세요!</p>
                                     </div>
-                                    <div className="w-full bg-white/30 rounded-full h-2">
-                                        <div
-                                            className="bg-white h-2 rounded-full transition-all duration-1000"
-                                            style={{ width: `${Math.min((t.currentDegree / t.targetDegree) * 100, 100)}%` }}
-                                        ></div>
-                                    </div>
-                                    <p className="text-xs mt-2 text-white/80">친구들과 함께 기부하여 목표를 달성하세요!</p>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
-                            <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
-                                <span>🌡️</span> 쿠키월드 사랑의 온도
-                            </h2>
-                            <div className="text-4xl font-black mb-2">{loveTemperature.toFixed(1)}°C</div>
-                            <div className="w-full bg-white/30 rounded-full h-2">
-                                <div
-                                    className="bg-white h-2 rounded-full transition-all duration-1000"
-                                    style={{ width: `${Math.min(loveTemperature, 100)}%` }}
-                                ></div>
+                                ))}
                             </div>
-                            <p className="text-xs mt-2 text-white/80">친구들의 기부로 온도가 올라갑니다!</p>
-                        </div>
+                        ) : (
+                            <div className="bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
+                                <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
+                                    <span>🌡️</span> 쿠키월드 사랑의 온도
+                                </h2>
+                                <div className="text-4xl font-black mb-2">{loveTemperature.toFixed(1)}°C</div>
+                                <div className="w-full bg-white/30 rounded-full h-2">
+                                    <div
+                                        className="bg-white h-2 rounded-full transition-all duration-1000"
+                                        style={{ width: `${Math.min(loveTemperature, 100)}%` }}
+                                    ></div>
+                                </div>
+                                <p className="text-xs mt-2 text-white/80">친구들의 기부로 온도가 올라갑니다!</p>
+                            </div>
+                        )
                     )}
                 </div>
 
@@ -637,18 +657,22 @@ export default function StudentShop() {
                                 >
                                     <span>💡</span> 아이템 제안하기
                                 </button>
-                                <button
-                                    onClick={() => window.location.href = '/bank'}
-                                    className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
-                                >
-                                    <span>🏦</span> 은행 가기
-                                </button>
-                                <button
-                                    onClick={() => window.location.href = '/square'}
-                                    className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-bold hover:bg-green-200 transition-colors flex items-center gap-1"
-                                >
-                                    <span>🌳</span> 광장 가기
-                                </button>
+                                {featureFlags.isBankEnabled && (
+                                    <button
+                                        onClick={() => window.location.href = '/bank'}
+                                        className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                    >
+                                        <span>🏦</span> 은행 가기
+                                    </button>
+                                )}
+                                {featureFlags.isSquareEnabled && (
+                                    <button
+                                        onClick={() => window.location.href = '/square'}
+                                        className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-bold hover:bg-green-200 transition-colors flex items-center gap-1"
+                                    >
+                                        <span>🌳</span> 광장 가기
+                                    </button>
+                                )}
                                 <button
                                     onClick={handleLogout}
                                     className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors"
