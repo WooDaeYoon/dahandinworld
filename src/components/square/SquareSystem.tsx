@@ -7,6 +7,24 @@ import AvatarDisplay from '../shop/AvatarDisplay';
 import { getProxyImageUrl } from '@/lib/utils';
 import { dahandinClient } from '@/lib/dahandin/client';
 
+const renderTextWithLinks = (text: string) => {
+    if (!text) return text;
+    // URL 매칭 정규식 (http://, https:// 또는 www. 으로 시작하는 문자열)
+    const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+        if (part.match(urlRegex)) {
+            const href = part.startsWith('http') ? part : `http://${part}`;
+            return (
+                <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80 break-all cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                    {part}
+                </a>
+            );
+        }
+        return part;
+    });
+};
+
 export default function SquareSystem() {
     const router = useRouter();
     const [classCode, setClassCode] = useState<string | null>(null);
@@ -336,7 +354,7 @@ export default function SquareSystem() {
                                 </svg>
                             </div>
                             <div className="flex-1">
-                                <div className="font-black text-gray-800 text-sm whitespace-pre-wrap leading-snug">{activeNotice.message}</div>
+                                <div className="font-black text-gray-800 text-sm whitespace-pre-wrap leading-snug">{renderTextWithLinks(activeNotice.message)}</div>
                                 <div className="text-xs text-gray-400 mt-1">
                                     {activeNotice.createdAt?.toDate ? new Date(activeNotice.createdAt.toDate()).toLocaleDateString() : ''}
                                 </div>
@@ -366,7 +384,7 @@ export default function SquareSystem() {
                                 {/* Speech Bubble */}
                                 {bubbles[user.studentCode] && (
                                     <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-white px-4 py-2 rounded-2xl shadow-lg border border-gray-100 z-20 whitespace-nowrap animate-bounce-slight key-bubble">
-                                        <div className="text-gray-800 font-medium text-sm">{bubbles[user.studentCode].message}</div>
+                                        <div className="text-gray-800 font-medium text-sm">{renderTextWithLinks(bubbles[user.studentCode].message)}</div>
                                         <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white rotate-45 border-b border-r border-gray-100"></div>
                                     </div>
                                 )}
@@ -441,7 +459,7 @@ export default function SquareSystem() {
                                             ? 'bg-indigo-500 text-white rounded-tr-none'
                                             : 'bg-white text-gray-700 border border-gray-200 rounded-tl-none'
                                             }`}>
-                                            {msg.message}
+                                            {renderTextWithLinks(msg.message)}
                                         </div>
                                         {timeString && (
                                             <span className="text-[10px] text-gray-400 whitespace-nowrap mb-1">

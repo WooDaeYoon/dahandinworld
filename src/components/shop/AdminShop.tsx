@@ -5,6 +5,26 @@ import { firebaseService, ShopItem, SquareParticipant, Thermometer, TeacherMessa
 import { dahandinClient } from '@/lib/dahandin/client';
 import AvatarDisplay from './AvatarDisplay';
 import { getProxyImageUrl } from '@/lib/utils';
+import LotteryModal from './LotteryModal';
+import SeatingModal from './SeatingModal';
+
+const renderTextWithLinks = (text: string) => {
+    if (!text) return text;
+    // URL 매칭 정규식 (http://, https:// 또는 www. 으로 시작하는 문자열)
+    const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+        if (part.match(urlRegex)) {
+            const href = part.startsWith('http') ? part : `http://${part}`;
+            return (
+                <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80 break-all cursor-pointer text-blue-600 font-bold" onClick={(e) => e.stopPropagation()}>
+                    {part}
+                </a>
+            );
+        }
+        return part;
+    });
+};
 
 export default function AdminShop() {
     const [items, setItems] = useState<ShopItem[]>([]);
@@ -2697,7 +2717,7 @@ export default function AdminShop() {
                                                 </div>
                                             </div>
                                             <div className="ml-10 text-gray-700 whitespace-pre-wrap bg-white p-3 rounded-lg border border-yellow-100/50">
-                                                {msg.message}
+                                                {renderTextWithLinks(msg.message)}
                                             </div>
                                         </div>
                                     ))
