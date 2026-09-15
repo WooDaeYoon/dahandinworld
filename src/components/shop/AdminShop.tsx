@@ -5,8 +5,6 @@ import { firebaseService, ShopItem, SquareParticipant, Thermometer, TeacherMessa
 import { dahandinClient } from '@/lib/dahandin/client';
 import AvatarDisplay from './AvatarDisplay';
 import { getProxyImageUrl } from '@/lib/utils';
-import LotteryModal from './LotteryModal';
-import SeatingModal from './SeatingModal';
 
 const renderTextWithLinks = (text: string) => {
     if (!text) return text;
