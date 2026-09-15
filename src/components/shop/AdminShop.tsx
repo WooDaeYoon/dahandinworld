@@ -406,9 +406,12 @@ export default function AdminShop() {
                 requiredBadge: newItem.requiredBadge || '',
                 isConsumable: itemType === 'consumable',
                 useStock: newItem.useStock || false,
-                stock: newItem.stock || 0,
-                maxPerStudent: itemType === 'consumable' ? (newItem.maxPerStudent || 0) : undefined
+                stock: newItem.stock || 0
             };
+
+            if (itemType === 'consumable') {
+                payload.maxPerStudent = newItem.maxPerStudent || 0;
+            }
 
             if (itemType !== 'consumable' && newItem.style) {
                 payload.style = newItem.style;
